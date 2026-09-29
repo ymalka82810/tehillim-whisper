@@ -1,0 +1,11 @@
+{
+ "lajla_plain": "וָלָיְלָה",
+ "lajla_speak_only": "<speak>וָלָיְלָה</speak>",
+ "lajla_milel": "<speak><phoneme alphabet=\"ipa\" ph=\"vaˈlajla\">וָלָיְלָה</phoneme></speak>",
+ "lajla_milra": "<speak><phoneme alphabet=\"ipa\" ph=\"valajˈla\">וָלָיְלָה</phoneme></speak>",
+ "shibarta_plain": "שִׁבַּרְתָּ",
+ "shibarta_milel": "<speak><phoneme alphabet=\"ipa\" ph=\"ʃiˈbaʁta\">שִׁבַּרְתָּ</phoneme></speak>",
+ "shibarta_milra": "<speak><phoneme alphabet=\"ipa\" ph=\"ʃibaʁˈta\">שִׁבַּרְתָּ</phoneme></speak>",
+ "verse_plain": "קוּמָה אֲדֹנָי הוֹשִׁיעֵנִי אֱלֹהַי כִּי הִכִּיתָ אֶת כֹּל אֹיְבַי לֶחִי שִׁנֵּי רְשָׁעִים שִׁבַּרְתָּ",
+ "verse_app_ssml": "<speak>קוּמָה אֲדֹנָי <phoneme alphabet=\"ipa\" ph=\"hoʃiˈeni\">הוֹשִׁיעֵנִי</phoneme> אֱלֹהַי כִּי <phoneme alphabet=\"ipa\" ph=\"hiˈkita\">הִכִּיתָ</phoneme> אֶת כֹּל אֹיְבַי <phoneme alphabet=\"ipa\" ph=\"ˈleχi\">לֶחִי</phoneme> שִׁנֵּי רְשָׁעִים <phoneme alphabet=\"ipa\" ph=\"ʃiˈbaʁta\">שִׁבַּרְתָּ</phoneme></speak>"
+}

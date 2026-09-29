@@ -1,0 +1,66 @@
+name: TTS SSML test (emulator)
+
+on:
+  push:
+    branches: [test/tts-ssml]
+  workflow_dispatch:
+
+jobs:
+  emulator:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        api-level: [34, 30]
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - run: npm ci
+      - run: npm run sync
+
+      - name: Build app and test APKs
+        working-directory: android
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleDebug assembleDebugAndroidTest --no-daemon
+
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Run on emulator
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: ${{ matrix.api-level }}
+          target: google_apis_playstore
+          arch: x86_64
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim
+          script: |
+            adb install -r android/app/build/outputs/apk/debug/app-debug.apk
+            adb install -r android/app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk
+            adb shell pm list packages | grep -i tts || true
+            adb shell dumpsys package com.google.android.tts | grep -i versionName || true
+            adb shell am instrument -w -e class io.github.ymalka82810.tehillim.TtsSsmlTest io.github.ymalka82810.tehillim.test/androidx.test.runner.AndroidJUnitRunner || true
+            mkdir -p out
+            adb exec-out run-as io.github.ymalka82810.tehillim tar c files/tts > out/tts.tar || true
+            cd out && tar xf tts.tar && ls -la files/tts && cat files/tts/report.json
+
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: tts-api${{ matrix.api-level }}
+          path: out/files/tts
