@@ -8,6 +8,10 @@ const store = {
 
 const chapters = await (await fetch('data/tehillim.json')).json();
 
+// In the Android app, the WebView has no speechSynthesis, so speech goes through the native plugin
+const native = window.Capacitor?.isNativePlatform?.() ? window.Capacitor.registerPlugin('NativeSpeech') : null;
+document.body.classList.add(native ? 'is-native' : 'is-web');
+
 // ---------- Hebrew numerals ----------
 const ONES = ['', 'א', 'ב', 'ג', 'ד', 'ה', 'ו', 'ז', 'ח', 'ט'];
 const TENS = ['', 'י', 'כ', 'ל', 'מ', 'נ', 'ס', 'ע', 'פ', 'צ'];
@@ -82,19 +86,50 @@ const settings = {
   announce: store.get('announce', true),
 };
 
-let voices = [];
-function loadVoices() {
-  voices = speechSynthesis.getVoices().filter(v => /^(he|iw)/i.test(v.lang));
+let voices = []; // [{ id, label }]
+let voiceHealth = null;
+
+async function loadVoices() {
+  if (native) {
+    voiceHealth = await native.status();
+    voices = voiceHealth.voices
+      .filter(v => v.installed || v.network)
+      .map((v, i) => ({ id: v.name, label: `קול ${i + 1}${v.network ? ' (דורש אינטרנט)' : ''}` }));
+  } else {
+    voices = speechSynthesis.getVoices()
+      .filter(v => /^(he|iw)/i.test(v.lang))
+      .map(v => ({ id: v.voiceURI, label: `${v.name}${v.localService ? '' : ' (דורש אינטרנט)'}`, voice: v }));
+  }
   const sel = $('voiceSel');
   sel.innerHTML = '';
-  for (const v of voices) sel.add(new Option(`${v.name}${v.localService ? '' : ' (אונליין)'}`, v.voiceURI));
+  for (const v of voices) sel.add(new Option(v.label, v.id));
   if (!voices.length) sel.add(new Option('לא נמצא קול עברי', ''));
-  if (settings.voiceURI && voices.some(v => v.voiceURI === settings.voiceURI)) sel.value = settings.voiceURI;
-  if (!voices.length && speechSynthesis.getVoices().length) {
-    setStatus('לא נמצא קול עברי במכשיר. יש להתקין קול עברי בהגדרות ההקראה (Text-to-speech) של הטלפון.');
-  }
+  if (currentVoice()) sel.value = currentVoice().id;
+  renderVoiceHealth();
 }
-const currentVoice = () => voices.find(v => v.voiceURI === settings.voiceURI) || voices[0] || null;
+const currentVoice = () => voices.find(v => v.id === settings.voiceURI) || voices[0] || null;
+
+function voiceProblem() {
+  if (!native) return !voices.length && speechSynthesis.getVoices().length
+    ? 'לא נמצא קול עברי במכשיר. ההוראות להתקנה מופיעות בהגדרות.' : '';
+  if (!voiceHealth?.ready) return 'מנוע הדיבור של הטלפון לא זמין. פתחו את הגדרות ההקראה ובחרו מנוע.';
+  const google = voiceHealth.engine === 'com.google.android.tts';
+  if (voiceHealth.hebrew === 'unsupported') {
+    if (!voiceHealth.hasGoogle) return 'מנוע הדיבור בטלפון לא תומך בעברית. התקינו את מנוע הדיבור של Google.';
+    if (!google) return 'בחרו ב-Google כ"מנוע מועדף" בהגדרות ההקראה של הטלפון.';
+    return 'עברית לא זמינה. לחצו "התקנת קול עברי".';
+  }
+  if (voiceHealth.hebrew === 'missing' || !voices.length) return 'צריך להוריד את הקול העברי. לחצו "התקנת קול עברי" ובחרו עברית.';
+  return '';
+}
+
+function renderVoiceHealth() {
+  const problem = voiceProblem();
+  $('voiceHealth').textContent = problem || '✓ קול עברי מותקן ומוכן';
+  $('voiceHealth').classList.toggle('bad', !!problem);
+  $('googleTtsBtn').hidden = !native || voiceHealth?.hasGoogle !== false;
+  if (problem && !playing) setStatus(problem);
+}
 
 function bindSettings() {
   const rate = $('rate'), pause = $('pause');
@@ -114,16 +149,31 @@ function bindSettings() {
   $('announce').onchange = e => save('announce', e.target.checked);
   $('voiceSel').onchange = e => save('voiceURI', e.target.value);
   $('settingsBtn').onclick = () => $('settings').showModal();
-  $('testVoice').onclick = () => { speechSynthesis.cancel(); speak(speakable(chapters[22][0], settings.nikudSpeech)); };
+  $('testVoice').onclick = () => { cancelSpeech(); speak(speakable(chapters[22][0], settings.nikudSpeech)); };
+  if (native) {
+    $('installVoiceBtn').onclick = () => native.installVoice();
+    $('ttsSettingsBtn').onclick = () => native.openTtsSettings();
+    $('googleTtsBtn').onclick = () => native.installGoogleEngine();
+  }
 }
 
 // ---------- Speech ----------
 let liveUtterance = null; // keep a reference: Chrome drops events of garbage-collected utterances
-function speak(text) {
+async function speak(text) {
+  if (native) {
+    const started = performance.now();
+    try {
+      await native.speak({ text, rate: settings.rate, voice: currentVoice()?.id || '' });
+    } catch {
+      renderVoiceHealth();
+      await new Promise(r => setTimeout(r, 1000));
+    }
+    return (performance.now() - started) / 1000;
+  }
   return new Promise(resolve => {
     const u = new SpeechSynthesisUtterance(text);
     u.lang = 'he-IL';
-    const voice = currentVoice();
+    const voice = currentVoice()?.voice;
     if (voice) u.voice = voice;
     u.rate = settings.rate;
     let started = performance.now();
@@ -132,6 +182,11 @@ function speak(text) {
     liveUtterance = u;
     speechSynthesis.speak(u);
   });
+}
+
+function cancelSpeech() {
+  if (native) native.stop();
+  else speechSynthesis.cancel();
 }
 
 const sleep = (s, token) => new Promise(resolve => {
@@ -214,8 +269,7 @@ async function run() {
     if (token !== runToken) return;
     const next = step(pos, 1);
     if (!next || cmp(next, range.end) > 0) {
-      playing = false;
-      updatePlayButton();
+      stop();
       setStatus('סיימת. תזכו למצוות!');
       $('bar').style.width = '100%';
       return;
@@ -225,8 +279,8 @@ async function run() {
 }
 
 // Silent looping audio keeps the media session alive so lock-screen and car (Bluetooth) buttons work
-const silence = new Audio(URL.createObjectURL(silentWav()));
-silence.loop = true;
+const silence = native ? null : new Audio(URL.createObjectURL(silentWav()));
+if (silence) silence.loop = true;
 function silentWav() {
   const rate = 8000, n = rate;
   const buf = new DataView(new ArrayBuffer(44 + n));
@@ -241,6 +295,7 @@ function silentWav() {
 
 let wakeLock = null;
 async function keepAwake(on) {
+  if (native) return native.keepAwake({ on });
   try {
     if (on && !wakeLock && 'wakeLock' in navigator) {
       wakeLock = await navigator.wakeLock.request('screen');
@@ -250,7 +305,11 @@ async function keepAwake(on) {
     }
   } catch {}
 }
-document.addEventListener('visibilitychange', () => { if (playing && document.visibilityState === 'visible') keepAwake(true); });
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState !== 'visible') return;
+  if (playing) keepAwake(true);
+  else if (native) loadVoices(); // returning from the phone's speech settings
+});
 
 function updatePlayButton() {
   $('playBtn').textContent = playing ? '⏸' : '▶';
@@ -263,7 +322,7 @@ function play() {
   if (!voices.length) loadVoices();
   playing = true;
   updatePlayButton();
-  silence.play().catch(() => {});
+  silence?.play().catch(() => {});
   keepAwake(true);
   run();
 }
@@ -271,8 +330,8 @@ function play() {
 function stop() {
   playing = false;
   runToken++;
-  speechSynthesis.cancel();
-  silence.pause();
+  cancelSpeech();
+  silence?.pause();
   keepAwake(false);
   updatePlayButton();
   if (pos) setStatus('מושהה');
@@ -284,7 +343,7 @@ function jump(dir) {
   if (!next || cmp(next, range.start) < 0 || cmp(next, range.end) > 0) return;
   pos = next;
   runToken++;
-  speechSynthesis.cancel();
+  cancelSpeech();
   render();
   if (playing) run();
 }
@@ -317,8 +376,7 @@ if ('mediaSession' in navigator) {
   navigator.mediaSession.setActionHandler('previoustrack', () => jump(-1));
 }
 
-speechSynthesis.onvoiceschanged = loadVoices;
-loadVoices();
+if (!native) speechSynthesis.onvoiceschanged = loadVoices;
 bindSettings();
 
 const saved = store.get('session', null);
@@ -343,4 +401,7 @@ if (saved?.range && saved?.pos) {
   if (saved) store.set('session', saved);
 }
 
-if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js');
+await loadVoices();
+if (native && voiceProblem()) $('settings').showModal();
+
+if (!native && 'serviceWorker' in navigator) navigator.serviceWorker.register('sw.js');

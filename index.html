@@ -47,6 +47,20 @@
   <dialog id="settings">
     <form method="dialog">
       <h2>הגדרות</h2>
+      <section class="phone-voice">
+        <h3>קול עברי בטלפון</h3>
+        <p id="voiceHealth"></p>
+        <div class="native-only">
+          <button id="installVoiceBtn" type="button">התקנת קול עברי</button>
+          <button id="ttsSettingsBtn" type="button">הגדרות ההקראה של הטלפון</button>
+          <button id="googleTtsBtn" type="button" hidden>התקנת מנוע הדיבור של Google</button>
+        </div>
+        <details class="web-only">
+          <summary>איך מתקינים קול עברי?</summary>
+          <p><b>אנדרואיד:</b> הגדרות ← נגישות (או ניהול כללי ← שפה) ← פלט טקסט לדיבור ← מנוע Google ← התקנת נתוני קול ← עברית.</p>
+          <p><b>אייפון:</b> הגדרות ← נגישות ← תוכן מוקרא ← קולות ← עברית.</p>
+        </details>
+      </section>
       <label>קול
         <select id="voiceSel"></select>
       </label>
