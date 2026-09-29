@@ -7,3 +7,4 @@ scripts/audio/models/
 scripts/audio/.venv/
 scripts/audio/render*.log
 scripts/audio/__pycache__/
+scripts/audio/voices/

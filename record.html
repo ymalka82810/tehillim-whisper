@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#14161b">
+  <meta name="robots" content="noindex">
+  <title>הקלטת קול · תהילים בדרך</title>
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="style.css">
+  <style>
+    .rec { display: grid; gap: 14px; padding-bottom: 24px; }
+    .rec p, .rec ul { margin: 0; }
+    .rec ul { padding-inline-start: 20px; color: var(--muted); display: grid; gap: 4px; }
+    .rec label.check { display: flex; align-items: flex-start; gap: 8px; }
+    .rec input[type=checkbox] { margin-top: 4px; accent-color: var(--accent); }
+    .script {
+      font-family: "SBL Hebrew", "Ezra SIL", "Taamey Frank CLM", "David", "Times New Roman", serif;
+      font-size: clamp(1.25rem, 5vw, 1.6rem);
+      line-height: 1.8;
+      padding: 14px;
+      border-radius: 12px;
+      background: var(--panel);
+    }
+    .meter { height: 8px; background: var(--panel); border-radius: 4px; overflow: hidden; }
+    #level { height: 100%; width: 0; background: var(--accent); transition: width 0.08s; }
+    #level.loud { background: #f0a36b; }
+    .timer { font-size: 2rem; font-variant-numeric: tabular-nums; text-align: center; color: var(--accent); direction: ltr; }
+    .row { display: flex; flex-wrap: wrap; gap: 8px; }
+    .row button, .row a { flex: 1 1 140px; text-align: center; }
+    .row a { text-decoration: none; }
+    button:disabled { opacity: 0.45; cursor: default; }
+    .primary { background: var(--accent); color: var(--accent-ink); border: none; }
+    audio { width: 100%; }
+    #note { color: var(--muted); min-height: 1.5em; }
+    #note.bad { color: #f0a36b; }
+    code { direction: ltr; unicode-bidi: embed; background: var(--panel); padding: 2px 6px; border-radius: 6px; font-size: 0.85rem; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>הקלטת קול</h1>
+    <a href="./" class="icon-btn" style="color: var(--muted); text-decoration: none;" aria-label="חזרה לאפליקציה">✕</a>
+  </header>
+
+  <section class="rec">
+    <p>מקליטים כ-20 שניות של קריאה, ומהן נוצר קול מקריא חדש לכל התהילים. ההקלטה נשארת במכשיר שלכם ולא נשלחת לשום מקום.</p>
+    <ul>
+      <li>חדר שקט, בלי מוזיקה, טלוויזיה או מזגן רועש.</li>
+      <li>הטלפון או המיקרופון במרחק של כ-20 ס״מ מהפה.</li>
+      <li>קוראים בקצב רגיל ובטון טבעי, כמו שהייתם רוצים לשמוע את ההקראה.</li>
+    </ul>
+
+    <label class="check"><input id="consent" type="checkbox"> זה הקול שלי, או שבעל הקול הסכים במפורש שייווצר ממנו קול מקריא.</label>
+
+    <p>קראו בקול את הטקסט הבא:</p>
+    <div id="script" class="script"></div>
+
+    <div class="meter"><div id="level"></div></div>
+    <div id="timer" class="timer">0:00</div>
+    <div class="row">
+      <button id="recBtn" class="primary" disabled>⏺ התחלת הקלטה</button>
+      <button id="stopBtn" hidden>⏹ סיום</button>
+    </div>
+    <p id="note" aria-live="polite"></p>
+
+    <div id="result" class="rec" hidden>
+      <audio id="player" controls></audio>
+      <div class="row">
+        <a id="saveBtn" class="primary" download>💾 שמירת הקובץ</a>
+        <button id="shareBtn" hidden>📤 שיתוף</button>
+      </div>
+      <p class="hint" style="margin: 0;">מעבירים את הקובץ למחשב ומריצים:<br>
+        <code>uv run render.py &lt;name&gt; --clone voice.wav --label "השם" --chapters 1-3</code></p>
+    </div>
+  </section>
+
+  <script src="record.js" type="module"></script>
+</body>
+</html>
