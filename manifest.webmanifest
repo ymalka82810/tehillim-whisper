@@ -1,0 +1,16 @@
+{
+  "name": "תהילים בדרך",
+  "short_name": "תהילים",
+  "description": "הקראת תהילים פסוק אחר פסוק, עם הפסקה לחזרה",
+  "lang": "he",
+  "dir": "rtl",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#14161b",
+  "theme_color": "#14161b",
+  "icons": [
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}

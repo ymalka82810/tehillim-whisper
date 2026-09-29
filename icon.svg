@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" fill="#14161b"/>
+  <circle cx="256" cy="256" r="190" fill="none" stroke="#e0b35a" stroke-width="18"/>
+  <text x="256" y="330" text-anchor="middle" font-family="David, 'Times New Roman', serif" font-size="230" font-weight="700" fill="#e0b35a">תה</text>
+</svg>

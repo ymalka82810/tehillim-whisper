@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#14161b">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>תהילים בדרך</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icon.svg">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header>
+    <h1>תהילים בדרך</h1>
+    <button id="settingsBtn" class="icon-btn" aria-label="הגדרות">⚙</button>
+  </header>
+
+  <section class="picker">
+    <div class="quick">
+      <button id="todayMonthBtn">יומי (לפי החודש)</button>
+      <button id="todayWeekBtn">יומי (לפי השבוע)</button>
+      <button id="resumeBtn" hidden>המשך מהמקום שעצרת</button>
+    </div>
+    <div class="range">
+      <label>מפרק <select id="fromSel"></select></label>
+      <label>עד פרק <select id="toSel"></select></label>
+    </div>
+  </section>
+
+  <main>
+    <div id="where" class="where"></div>
+    <p id="verse" class="verse"></p>
+    <div id="status" class="status" aria-live="polite"></div>
+    <div class="progress"><div id="bar"></div></div>
+  </main>
+
+  <nav class="controls" dir="ltr">
+    <button id="prevBtn" class="ctl" aria-label="פסוק קודם">⏮</button>
+    <button id="playBtn" class="ctl play" aria-label="נגן">▶</button>
+    <button id="nextBtn" class="ctl" aria-label="פסוק הבא">⏭</button>
+  </nav>
+
+  <dialog id="settings">
+    <form method="dialog">
+      <h2>הגדרות</h2>
+      <label>קול
+        <select id="voiceSel"></select>
+      </label>
+      <label>מהירות הקראה: <output id="rateOut"></output>
+        <input id="rate" type="range" min="0.5" max="1.5" step="0.05">
+      </label>
+      <label>זמן לחזרה אחרי כל פסוק: <output id="pauseOut"></output>
+        <input id="pause" type="range" min="0" max="2" step="0.1">
+      </label>
+      <p class="hint">0 = הקראה רצופה בלי הפסקה. 1 = הפסקה באורך הפסוק.</p>
+      <label class="check"><input id="nikudSpeech" type="checkbox"> לשלוח ניקוד למנוע הדיבור</label>
+      <p class="hint">אם ההגייה נשמעת משובשת, נסו לשנות את האפשרות הזו.</p>
+      <label class="check"><input id="announce" type="checkbox"> להכריז על תחילת כל פרק</label>
+      <button id="testVoice" type="button">בדיקת קול</button>
+      <button value="close" class="primary">סגור</button>
+      <p class="credit">טקסט: <a href="https://he.wikisource.org/wiki/מקרא_על_פי_המסורה" target="_blank" rel="noopener">מקרא על פי המסורה</a> (CC-BY-SA) דרך Sefaria</p>
+    </form>
+  </dialog>
+
+  <script src="app.js" type="module"></script>
+</body>
+</html>
