@@ -111,5 +111,20 @@ dialog input[type=range] { width: 100%; accent-color: var(--accent); }
 #voiceHealth { color: #8fd18f; }
 #voiceHealth.bad { color: #f0a36b; }
 .is-web .native-only, .is-native .web-only { display: none !important; }
+.update {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 14px;
+  margin-bottom: 10px;
+  border-radius: 12px;
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-weight: 600;
+}
+.update[hidden] { display: none; }
+.update button { background: var(--accent-ink); color: var(--accent); border: none; white-space: nowrap; }
+.is-native .version-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; color: var(--muted); }
 .credit { color: var(--muted); font-size: 0.8rem; margin: 0; }
 .credit a { color: var(--muted); }

@@ -404,4 +404,32 @@ if (saved?.range && saved?.pos) {
 await loadVoices();
 if (native && voiceProblem()) $('settings').showModal();
 
+// ---------- App updates (APK only) ----------
+const RELEASES_API = 'https://api.github.com/repos/ymalka82810/tehillim-whisper/releases/latest';
+async function checkForUpdate(manual = false) {
+  const { versionCode, versionName } = await native.appInfo();
+  $('versionText').textContent = `גרסה ${versionName}`;
+  try {
+    const res = await fetch(RELEASES_API, { cache: 'no-store' });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const release = await res.json();
+    const latest = Number(release.tag_name.match(/(\d+)$/)?.[1] || 0);
+    const apk = release.assets.find(a => a.name.endsWith('.apk'));
+    if (latest > versionCode && apk) {
+      $('updateText').textContent = `גרסה חדשה זמינה (${release.tag_name.replace(/^v/, '')})`;
+      $('updateBtn').onclick = () => native.openUrl({ url: apk.browser_download_url });
+      $('updateBanner').hidden = false;
+      if (manual) $('settings').close();
+    } else if (manual) {
+      $('versionText').textContent = `גרסה ${versionName} · זו הגרסה העדכנית`;
+    }
+  } catch {
+    if (manual) $('versionText').textContent = `גרסה ${versionName} · אין חיבור לבדיקת עדכונים`;
+  }
+}
+if (native) {
+  $('checkUpdateBtn').onclick = () => checkForUpdate(true);
+  checkForUpdate();
+}
+
 if (!native && 'serviceWorker' in navigator) navigator.serviceWorker.register('sw.js');

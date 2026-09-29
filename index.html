@@ -19,6 +19,11 @@
     <button id="settingsBtn" class="icon-btn" aria-label="הגדרות">⚙</button>
   </header>
 
+  <div id="updateBanner" class="update" hidden>
+    <span id="updateText"></span>
+    <button id="updateBtn" type="button">עדכן עכשיו</button>
+  </div>
+
   <section class="picker">
     <div class="quick">
       <button id="todayMonthBtn">יומי (לפי החודש)</button>
@@ -75,6 +80,10 @@
       <p class="hint">אם ההגייה נשמעת משובשת, נסו לשנות את האפשרות הזו.</p>
       <label class="check"><input id="announce" type="checkbox"> להכריז על תחילת כל פרק</label>
       <button id="testVoice" type="button">בדיקת קול</button>
+      <div class="native-only version-row">
+        <span id="versionText"></span>
+        <button id="checkUpdateBtn" type="button">בדיקת עדכונים</button>
+      </div>
       <button value="close" class="primary">סגור</button>
       <p class="credit">טקסט: <a href="https://he.wikisource.org/wiki/מקרא_על_פי_המסורה" target="_blank" rel="noopener">מקרא על פי המסורה</a> (CC-BY-SA) דרך Sefaria</p>
     </form>

@@ -2,7 +2,10 @@ package io.github.ymalka82810.tehillim;
 
 import android.content.ActivityNotFoundException;
 import android.content.Intent;
+import android.content.pm.PackageInfo;
+import android.content.pm.PackageManager;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
 import android.provider.Settings;
 import android.speech.tts.TextToSpeech;
@@ -210,6 +213,38 @@ public class NativeSpeechPlugin extends Plugin {
             tryStart(new Intent(Intent.ACTION_VIEW, Uri.parse("https://play.google.com/store/apps/details?id=" + GOOGLE_TTS)));
         }
         call.resolve();
+    }
+
+    @PluginMethod
+    public void appInfo(PluginCall call) {
+        JSObject ret = new JSObject();
+        try {
+            PackageInfo info = getContext().getPackageManager().getPackageInfo(getContext().getPackageName(), 0);
+            long code = Build.VERSION.SDK_INT >= Build.VERSION_CODES.P ? info.getLongVersionCode() : info.versionCode;
+            ret.put("versionCode", code);
+            ret.put("versionName", info.versionName);
+        } catch (PackageManager.NameNotFoundException e) {
+            ret.put("versionCode", 0);
+            ret.put("versionName", "");
+        }
+        call.resolve(ret);
+    }
+
+    @PluginMethod
+    public void openUrl(PluginCall call) {
+        String url = call.getString("url", "");
+        if (url == null || !url.startsWith("https://github.com/")) {
+            call.reject("unsupported url");
+            return;
+        }
+        Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
+        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        try {
+            getContext().startActivity(intent);
+            call.resolve();
+        } catch (ActivityNotFoundException e) {
+            call.reject("no browser");
+        }
     }
 
     private boolean tryStart(Intent intent) {
