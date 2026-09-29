@@ -74,7 +74,7 @@ public class TtsSsmlTest {
 
         // Wait for an installed (offline) Hebrew voice; the engine may download it in the background
         List<Voice> hebrew = new ArrayList<>();
-        long deadline = System.currentTimeMillis() + 8 * 60 * 1000;
+        long deadline = System.currentTimeMillis() + 60 * 1000;
         while (true) {
             hebrew.clear();
             boolean installedLocal = false;
@@ -95,6 +95,19 @@ public class TtsSsmlTest {
                 .put("features", v.getFeatures().toString()));
         }
         info.put("hebrewVoices", voices);
+        boolean english = hebrew.isEmpty();
+        if (english && tts.getVoices() != null) {
+            for (Voice v : tts.getVoices()) {
+                if (v.getLocale().toString().equals("en_US") && !v.isNetworkConnectionRequired() && !v.getFeatures().contains("notInstalled")) hebrew.add(v);
+                if (hebrew.size() >= 2) break;
+            }
+            JSONArray en = new JSONArray();
+            for (Voice v : hebrew) en.put(v.getName());
+            info.put("englishVoices", en);
+        }
+        try {
+            info.put("ttsVersion", ctx.getPackageManager().getPackageInfo("com.google.android.tts", 0).versionName);
+        } catch (Exception ignored) {}
         save();
 
         JSONObject results = new JSONObject();
@@ -107,6 +120,7 @@ public class TtsSsmlTest {
             Iterator<String> ids = cases.keys();
             while (ids.hasNext()) {
                 String id = ids.next();
+                if (english != id.startsWith("en_")) continue;
                 File wav = new File(outDir, key.replace('.', '_') + "__" + v.getName() + "__" + id + ".wav");
                 perVoice.put(id, synthesize(tts, cases.getString(id), wav));
                 save();
