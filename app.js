@@ -8,8 +8,11 @@ const store = {
 
 const chapters = await (await fetch('data/tehillim.json')).json();
 
-// In the Android app, the WebView has no speechSynthesis, so speech goes through the native plugin
-const native = window.Capacitor?.isNativePlatform?.() ? window.Capacitor.registerPlugin('NativeSpeech') : null;
+// In the Android app, the WebView has no speechSynthesis, so speech goes through the native plugin.
+// @capacitor/core isn't bundled, so call the plugin through the injected native bridge directly.
+const native = window.Capacitor?.isNativePlatform?.()
+  ? new Proxy({}, { get: (_, method) => options => window.Capacitor.nativePromise('NativeSpeech', method, options) })
+  : null;
 document.body.classList.add(native ? 'is-native' : 'is-web');
 
 // ---------- Hebrew numerals ----------
