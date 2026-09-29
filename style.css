@@ -103,6 +103,8 @@ dialog label { display: grid; gap: 6px; }
 dialog label.check { display: flex; align-items: center; gap: 8px; }
 dialog input[type=range] { width: 100%; accent-color: var(--accent); }
 .hint { color: var(--muted); font-size: 0.85rem; margin: -8px 0 0; }
+#deviceVoice { display: grid; gap: 14px; }
+#deviceVoice[hidden] { display: none; }
 .primary { background: var(--accent); color: var(--accent-ink); border: none; }
 .phone-voice { display: grid; gap: 8px; padding: 12px; border-radius: 12px; background: var(--bg); }
 .phone-voice h3 { margin: 0; font-size: 1rem; }
@@ -151,8 +153,12 @@ dialog input[type=range] { width: 100%; accent-color: var(--accent); }
   animation: breathe 2.4s ease-in-out infinite;
 }
 #splash .string { animation: pluck 1.2s ease-in-out infinite; transform-box: fill-box; transform-origin: center; }
-#splash .string:nth-child(2) { animation-delay: 0.2s; }
-#splash .string:nth-child(3) { animation-delay: 0.4s; }
+#splash .string:nth-child(2) { animation-delay: 0.1s; }
+#splash .string:nth-child(3) { animation-delay: 0.2s; }
+#splash .string:nth-child(4) { animation-delay: 0.3s; }
+#splash .string:nth-child(5) { animation-delay: 0.4s; }
+#splash .string:nth-child(6) { animation-delay: 0.5s; }
+#splash .string:nth-child(7) { animation-delay: 0.6s; }
 .splash-text {
   position: absolute;
   top: calc(50% + 100px);
@@ -181,7 +187,7 @@ dialog input[type=range] { width: 100%; accent-color: var(--accent); }
 }
 .splash-pct { color: #f0c465; font-size: 0.9rem; font-variant-numeric: tabular-nums; direction: ltr; }
 @keyframes breathe { 50% { scale: 1.03; } }
-@keyframes pluck { 25% { transform: scaleX(1.8); opacity: 0.75; } 50% { transform: none; opacity: 1; } }
+@keyframes pluck { 25% { transform: scaleX(1.5); opacity: 0.8; } 50% { transform: none; opacity: 1; } }
 @keyframes rise { from { opacity: 0; translate: 0 12px; } }
 @keyframes sheen { to { background-position: -200% 0; } }
 @media (prefers-reduced-motion: reduce) {

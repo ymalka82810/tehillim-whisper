@@ -23,11 +23,15 @@
           <stop offset="1" stop-color="#c28a2f"/>
         </linearGradient>
       </defs>
-      <g transform="translate(54 55) scale(1.02) translate(-54 -55)">
+      <g transform="translate(54 55) scale(1.08) translate(-54 -55)">
         <g fill="none" stroke="url(#splashGold)" stroke-linecap="round" stroke-linejoin="round">
-          <path class="string" d="M47 38.4V72" stroke-width="1.5"/>
-          <path class="string" d="M54 37.4V72" stroke-width="1.5"/>
-          <path class="string" d="M61 38.4V72" stroke-width="1.5"/>
+          <path class="string" d="M45 38.6V72" stroke="#ffe9b0" stroke-width="1.15"/>
+          <path class="string" d="M48 38.2V72" stroke="#ffe9b0" stroke-width="1.15"/>
+          <path class="string" d="M51 38V72" stroke="#ffe9b0" stroke-width="1.15"/>
+          <path class="string" d="M54 37.9V72" stroke="#ffe9b0" stroke-width="1.15"/>
+          <path class="string" d="M57 38V72" stroke="#ffe9b0" stroke-width="1.15"/>
+          <path class="string" d="M60 38.2V72" stroke="#ffe9b0" stroke-width="1.15"/>
+          <path class="string" d="M63 38.6V72" stroke="#ffe9b0" stroke-width="1.15"/>
           <path d="M44 74C35 68 30.5 58 34 48C36.5 41 35.5 35.5 32 33M64 74C73 68 77.5 58 74 48C71.5 41 72.5 35.5 76 33" stroke-width="4.2"/>
           <path d="M35.5 40.5Q54 34.5 72.5 40.5" stroke-width="3.6"/>
         </g>
@@ -79,6 +83,13 @@
   <dialog id="settings">
     <form method="dialog">
       <h2>הגדרות</h2>
+      <label>קול מקריא
+        <select id="voiceKind">
+          <option value="device">קול הטלפון</option>
+        </select>
+      </label>
+      <p id="downloadStatus" class="hint" hidden></p>
+      <div id="deviceVoice">
       <section class="phone-voice">
         <h3>קול עברי בטלפון</h3>
         <p id="voiceHealth"></p>
@@ -102,6 +113,13 @@
       <label>קול
         <select id="voiceSel"></select>
       </label>
+      <label class="check"><input id="nikudSpeech" type="checkbox"> לשלוח ניקוד למנוע הדיבור</label>
+      <p class="hint">אם ההגייה נשמעת משובשת, נסו לשנות את האפשרות הזו.</p>
+      <div class="native-only">
+        <label class="check"><input id="stressSpeech" type="checkbox"> הטעמה לפי הטעמים (מלעיל/מלרע) — ניסיוני</label>
+        <p class="hint">מילים שהטעם שלהן במלעיל נשלחות למנוע עם תעתיק הגייה. אם הקול מקריא סימנים או מדלג על מילים, כבו את האפשרות.</p>
+      </div>
+      </div>
       <label>מהירות הקראה: <output id="rateOut"></output>
         <input id="rate" type="range" min="0.5" max="1.5" step="0.05">
       </label>
@@ -109,12 +127,6 @@
         <input id="pause" type="range" min="0" max="2" step="0.1">
       </label>
       <p class="hint">0 = הקראה רצופה בלי הפסקה. 1 = הפסקה באורך הפסוק.</p>
-      <label class="check"><input id="nikudSpeech" type="checkbox"> לשלוח ניקוד למנוע הדיבור</label>
-      <p class="hint">אם ההגייה נשמעת משובשת, נסו לשנות את האפשרות הזו.</p>
-      <div class="native-only">
-        <label class="check"><input id="stressSpeech" type="checkbox"> הטעמה לפי הטעמים (מלעיל/מלרע) — ניסיוני</label>
-        <p class="hint">מילים שהטעם שלהן במלעיל נשלחות למנוע עם תעתיק הגייה. אם הקול מקריא סימנים או מדלג על מילים, כבו את האפשרות.</p>
-      </div>
       <label class="check"><input id="announce" type="checkbox"> להכריז על תחילת כל פרק</label>
       <button id="testVoice" type="button">בדיקת קול</button>
       <div class="native-only version-row">
@@ -123,6 +135,7 @@
       </div>
       <button value="close" class="primary">סגור</button>
       <p class="credit">טקסט: <a href="https://he.wikisource.org/wiki/מקרא_על_פי_המסורה" target="_blank" rel="noopener">מקרא על פי המסורה</a> (CC-BY-SA) דרך Sefaria</p>
+      <p class="credit">הקולות עומר וליאת: <a href="https://github.com/thewh1teagle/pocket-tts-onnx" target="_blank" rel="noopener">Pocket TTS</a> של Kyutai עם מתאם עברי (CC BY 4.0), הגייה והטעמה: <a href="https://github.com/phonikud/phonikud" target="_blank" rel="noopener">Phonikud</a></p>
     </form>
   </dialog>
 

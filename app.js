@@ -187,6 +187,7 @@ function speakable(text, withNikud) {
 
 // ---------- Settings ----------
 const settings = {
+  voice: store.get('voice', store.get('gender', 'female') === 'male' ? 'omer' : 'liat'), // a recorded voice, or 'device'
   voiceURI: store.get('voiceURI', null),
   gender: store.get('gender', 'female'),
   rate: store.get('rate', 0.9),
@@ -240,8 +241,15 @@ function voiceProblem() {
   return '';
 }
 
+function showVoiceKind() {
+  $('voiceKind').value = recordedVoice() || 'device';
+  $('deviceVoice').hidden = !!recordedVoice();
+  renderDownloads();
+  renderVoiceHealth();
+}
+
 function renderVoiceHealth() {
-  const problem = voiceProblem();
+  const problem = recordedVoice() ? '' : voiceProblem();
   $('voiceHealth').textContent = problem || '✓ קול עברי מותקן ומוכן';
   $('voiceHealth').classList.toggle('bad', !!problem);
   $('googleTtsBtn').hidden = !native || voiceHealth?.hasGoogle !== false;
@@ -279,7 +287,12 @@ function bindSettings() {
     }
   };
   $('settingsBtn').onclick = () => $('settings').showModal();
-  $('testVoice').onclick = () => { cancelSpeech(); speak(speakable(chapters[22][0], settings.nikudSpeech)); };
+  $('testVoice').onclick = () => { cancelSpeech(); say(23, 1); };
+  $('voiceKind').onchange = e => {
+    save('voice', e.target.value);
+    showVoiceKind();
+    downloadInBackground();
+  };
   if (native) {
     $('installVoiceBtn').onclick = () => native.installVoice();
     $('ttsSettingsBtn').onclick = () => native.openTtsSettings();
@@ -287,7 +300,163 @@ function bindSettings() {
   }
 }
 
+// ---------- Recorded voices ----------
+// Every verse is pre-rendered (scripts/audio/render.py) with its stress taken from the te'amim.
+// A chapter is one file, its clips back to back (clip 0 announces the chapter); audio/index.json has their lengths.
+// The APK ships a few chapters (index.bundled); the rest download in the background and stay in the Cache API.
+const AUDIO_REMOTE = native ? 'https://ymalka82810.github.io/tehillim-whisper/audio/' : 'audio/';
+const AUDIO_CACHE = 'tehillim-audio';
+const RECORDED = { liat: 'ליאת (אישה)', omer: 'עומר (גבר)' };
+const canPlayOpus = !!new Audio().canPlayType('audio/ogg; codecs=opus');
+const audio = { index: null, shipped: null, stored: {}, memo: new Map(), inflight: new Map(), downloading: false };
+const pad3 = c => String(c).padStart(3, '0');
+const recordedVoice = () => canPlayOpus && audio.index?.voices[settings.voice] ? settings.voice : null;
+
+async function cachedJson(cache, url) {
+  const hit = await cache.match(url);
+  return hit ? hit.json() : null;
+}
+
+async function loadAudioIndex() {
+  if (!canPlayOpus || !('caches' in window)) return;
+  const cache = await caches.open(AUDIO_CACHE);
+  if (native) audio.shipped = await fetch('audio/index.json').then(r => r.json()).catch(() => null);
+  const url = `${AUDIO_REMOTE}index.json`;
+  try {
+    const res = await fetch(url, { cache: 'no-store', signal: AbortSignal.timeout(4000) }); // don't hold up the splash
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    audio.index = await res.clone().json();
+    await cache.put(url, res);
+  } catch {
+    audio.index = await cachedJson(cache, url) || audio.shipped; // offline: what was downloaded before
+  }
+  if (!audio.index) return;
+  // Chapters downloaded for an older rendering can't be sliced with the new lengths: drop them
+  const current = `.bin?v=${audio.index.version}`;
+  for (const voice of Object.keys(audio.index.voices)) audio.stored[voice] = new Set();
+  for (const req of await cache.keys()) {
+    if (!req.url.includes('.bin?')) continue;
+    const m = req.url.match(/\/(\w+)\/(\d{3})\.bin\?/);
+    if (!req.url.endsWith(current) || !audio.stored[m?.[1]]) await cache.delete(req);
+    else audio.stored[m[1]].add(Number(m[2]));
+  }
+}
+
+const isShipped = (voice, c) => !!audio.shipped?.bundled?.includes(c) && !!audio.shipped.voices[voice]?.chapters[c];
+const hasChapter = (voice, c) => isShipped(voice, c) || !!audio.stored[voice]?.has(c);
+
+function slice(bin, lengths) {
+  let at = 0;
+  return lengths.map(n => bin.slice(at, at += n, 'audio/ogg'));
+}
+
+// The player and the background download may ask for the same chapter at once: share one request
+function downloadChapter(voice, c) {
+  const url = `${AUDIO_REMOTE}${voice}/${pad3(c)}.bin?v=${audio.index.version}`;
+  if (!audio.inflight.has(url)) {
+    audio.inflight.set(url, (async () => {
+      const res = await fetch(url, { cache: 'no-store' });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const bin = await res.blob();
+      await (await caches.open(AUDIO_CACHE)).put(url, new Response(bin));
+      audio.stored[voice].add(c);
+      renderDownloads();
+      return bin;
+    })().finally(() => audio.inflight.delete(url)));
+  }
+  return audio.inflight.get(url);
+}
+
+// The clips of a chapter, or null when it isn't available (not rendered, or not downloaded and offline)
+async function chapterClips(voice, c) {
+  const key = `${voice}/${c}`;
+  if (audio.memo.has(key)) return audio.memo.get(key);
+  let clips = null;
+  try {
+    if (isShipped(voice, c)) {
+      clips = slice(await (await fetch(`audio/${voice}/${pad3(c)}.bin`)).blob(), audio.shipped.voices[voice].chapters[c]);
+    } else if (audio.index.voices[voice]?.chapters[c]) {
+      const url = `${AUDIO_REMOTE}${voice}/${pad3(c)}.bin?v=${audio.index.version}`;
+      const hit = await (await caches.open(AUDIO_CACHE)).match(url);
+      const bin = hit ? await hit.blob() : await downloadChapter(voice, c);
+      clips = slice(bin, audio.index.voices[voice].chapters[c]);
+    }
+  } catch {}
+  if (clips) {
+    audio.memo.clear(); // one chapter in memory is enough
+    audio.memo.set(key, clips);
+  }
+  return clips;
+}
+
+// Today's readings first, then where the reader is, then the rest in order
+function downloadOrder() {
+  const chaptersOf = r => Array.from({ length: r.end[0] - r.start[0] + 1 }, (_, i) => r.start[0] + i);
+  const first = [...chaptersOf(monthRange().range), ...chaptersOf(weekRange().range)];
+  if (pos) first.push(...Array.from({ length: 150 - pos[0] + 1 }, (_, i) => pos[0] + i));
+  return [...new Set([...first, ...Array.from({ length: 150 }, (_, i) => i + 1)])];
+}
+
+async function downloadInBackground() {
+  if (audio.downloading) return;
+  audio.downloading = true;
+  try {
+    for (;;) {
+      const voice = recordedVoice();
+      const next = voice && downloadOrder().find(c => audio.index.voices[voice].chapters[c] && !hasChapter(voice, c));
+      if (!next) break;
+      try {
+        await downloadChapter(voice, next);
+      } catch {
+        break; // offline or failing: try again when the connection is back
+      }
+    }
+  } finally {
+    audio.downloading = false;
+    renderDownloads();
+  }
+}
+window.addEventListener('online', downloadInBackground);
+
+function renderDownloads() {
+  const voice = recordedVoice();
+  const el = $('downloadStatus');
+  el.hidden = !voice;
+  if (!voice) return;
+  const total = Object.keys(audio.index.voices[voice].chapters).length;
+  const have = Object.keys(audio.index.voices[voice].chapters).filter(c => hasChapter(voice, Number(c))).length;
+  el.textContent = have >= total ? `✓ כל ${total} הפרקים זמינים גם בלי אינטרנט`
+    : `הורדו ${have} מתוך ${total} פרקים${audio.downloading ? ' · ממשיך להוריד ברקע' : ' · ההורדה תמשיך כשיהיה חיבור'}`;
+}
+
 // ---------- Speech ----------
+const clipPlayer = new Audio();
+let endClip = null;
+function playClip(blob) {
+  const url = URL.createObjectURL(blob);
+  const started = performance.now();
+  return new Promise(resolve => {
+    endClip = () => {
+      endClip = null;
+      clipPlayer.onended = clipPlayer.onerror = null;
+      URL.revokeObjectURL(url);
+      resolve((performance.now() - started) / 1000);
+    };
+    clipPlayer.onended = clipPlayer.onerror = endClip;
+    clipPlayer.src = url;
+    clipPlayer.defaultPlaybackRate = clipPlayer.playbackRate = settings.rate; // a new src resets playbackRate
+    clipPlayer.play().catch(() => endClip?.());
+  });
+}
+
+// Plays clip `i` of chapter `c` (0 = the announcement, else the verse), or falls back to the phone's voice
+async function say(c, i) {
+  const voice = recordedVoice();
+  const clips = voice && await chapterClips(voice, c);
+  if (clips?.[i]) return playClip(clips[i]);
+  return speak(i ? speakable(chapters[c - 1][i - 1], settings.nikudSpeech) : `פרק ${c}`);
+}
+
 let liveUtterance = null; // keep a reference: Chrome drops events of garbage-collected utterances
 async function speak(text) {
   if (native) {
@@ -316,6 +485,8 @@ async function speak(text) {
 }
 
 function cancelSpeech() {
+  clipPlayer.pause();
+  endClip?.();
   if (native) native.stop();
   else speechSynthesis.cancel();
 }
@@ -386,13 +557,13 @@ async function run() {
     const [c, v] = pos;
     if (settings.announce && v === 0 && lastChapter !== c) {
       setStatus('מכריז על הפרק');
-      await speak(`פרק ${c}`);
+      await say(c, 0);
       if (token !== runToken) return;
       await sleep(0.4, token);
     }
     lastChapter = c;
     setStatus('מקריא…');
-    const duration = await speak(speakable(chapters[c - 1][v], settings.nikudSpeech));
+    const duration = await say(c, v + 1);
     if (token !== runToken) return;
     const pause = settings.pause > 0 ? duration * settings.pause + 0.5 : 0.3;
     if (settings.pause > 0) setStatus('תורך לומר…');
@@ -532,11 +703,19 @@ if (saved?.range && saved?.pos) {
   if (saved) store.set('session', saved);
 }
 
-splash.set(85);
+splash.set(80);
+await loadAudioIndex();
+splash.set(90);
 await loadVoices();
+{
+  const kind = $('voiceKind');
+  for (const [id, label] of Object.entries(RECORDED)) if (audio.index?.voices[id] && canPlayOpus) kind.add(new Option(label, id), kind.options[kind.options.length - 1]);
+  showVoiceKind();
+}
 splash.set(100);
 await splash.done;
-if (native && voiceProblem()) $('settings').showModal();
+if (native && !recordedVoice() && voiceProblem()) $('settings').showModal();
+downloadInBackground();
 
 // ---------- App updates (APK only) ----------
 const RELEASES_API = 'https://api.github.com/repos/ymalka82810/tehillim-whisper/releases/latest';

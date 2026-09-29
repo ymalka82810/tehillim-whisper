@@ -2,3 +2,8 @@ node_modules/
 www/
 *.keystore
 *.jks
+scripts/audio/.cache/
+scripts/audio/models/
+scripts/audio/.venv/
+scripts/audio/render*.log
+scripts/audio/__pycache__/
