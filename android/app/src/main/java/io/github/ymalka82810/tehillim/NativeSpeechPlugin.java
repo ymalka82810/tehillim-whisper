@@ -1,5 +1,6 @@
 package io.github.ymalka82810.tehillim;
 
+import android.Manifest;
 import android.content.ActivityNotFoundException;
 import android.content.Intent;
 import android.content.pm.PackageInfo;
@@ -8,6 +9,9 @@ import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.provider.Settings;
+import android.speech.RecognitionListener;
+import android.speech.RecognizerIntent;
+import android.speech.SpeechRecognizer;
 import android.speech.tts.TextToSpeech;
 import android.speech.tts.UtteranceProgressListener;
 import android.speech.tts.Voice;
@@ -15,10 +19,13 @@ import android.view.WindowManager;
 
 import com.getcapacitor.JSArray;
 import com.getcapacitor.JSObject;
+import com.getcapacitor.PermissionState;
 import com.getcapacitor.Plugin;
 import com.getcapacitor.PluginCall;
 import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.CapacitorPlugin;
+import com.getcapacitor.annotation.Permission;
+import com.getcapacitor.annotation.PermissionCallback;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -28,7 +35,10 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
-@CapacitorPlugin(name = "NativeSpeech")
+@CapacitorPlugin(
+    name = "NativeSpeech",
+    permissions = @Permission(strings = { Manifest.permission.RECORD_AUDIO }, alias = "microphone")
+)
 public class NativeSpeechPlugin extends Plugin {
     private static final Locale HEBREW = Locale.forLanguageTag("he-IL");
     private static final String GOOGLE_TTS = "com.google.android.tts";
@@ -38,6 +48,8 @@ public class NativeSpeechPlugin extends Plugin {
     private boolean reinitOnResume = false;
     private final List<PluginCall> waitingForInit = new ArrayList<>();
     private final Map<String, PluginCall> speaking = new ConcurrentHashMap<>();
+    private SpeechRecognizer recognizer;
+    private PluginCall listening;
 
     @Override
     public void load() {
@@ -57,6 +69,7 @@ public class NativeSpeechPlugin extends Plugin {
     @Override
     protected void handleOnDestroy() {
         shutdownTts();
+        if (recognizer != null) recognizer.destroy();
     }
 
     private synchronized void initTts() {
@@ -180,6 +193,76 @@ public class NativeSpeechPlugin extends Plugin {
         finishAll(true);
         call.resolve();
     }
+
+    // ---------- Voice commands ----------
+    // One utterance per call: resolves with the recognizer's guesses, best first (empty when nothing was said)
+    @PluginMethod
+    public void listen(PluginCall call) {
+        if (getPermissionState("microphone") != PermissionState.GRANTED) {
+            requestPermissionForAlias("microphone", call, "microphonePermission");
+            return;
+        }
+        startListening(call);
+    }
+
+    @PermissionCallback
+    private void microphonePermission(PluginCall call) {
+        if (getPermissionState("microphone") == PermissionState.GRANTED) startListening(call);
+        else call.reject("permission");
+    }
+
+    private void startListening(PluginCall call) {
+        if (!SpeechRecognizer.isRecognitionAvailable(getContext())) {
+            call.reject("unavailable");
+            return;
+        }
+        // SpeechRecognizer must be used on the main thread
+        getActivity().runOnUiThread(() -> {
+            finishListening(new ArrayList<>());
+            if (recognizer == null) {
+                recognizer = SpeechRecognizer.createSpeechRecognizer(getContext());
+                recognizer.setRecognitionListener(recognitionListener);
+            }
+            listening = call;
+            Intent intent = new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
+            intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM);
+            intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE, "he-IL");
+            intent.putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 5);
+            intent.putExtra(RecognizerIntent.EXTRA_CALLING_PACKAGE, getContext().getPackageName());
+            recognizer.startListening(intent);
+        });
+    }
+
+    private void finishListening(List<String> matches) {
+        if (listening == null) return;
+        JSArray list = new JSArray();
+        for (String m : matches) list.put(m);
+        JSObject ret = new JSObject();
+        ret.put("matches", list);
+        listening.resolve(ret);
+        listening = null;
+    }
+
+    private final RecognitionListener recognitionListener = new RecognitionListener() {
+        @Override public void onResults(Bundle results) {
+            ArrayList<String> matches = results.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION);
+            finishListening(matches != null ? matches : new ArrayList<>());
+        }
+        @Override public void onError(int error) {
+            if (listening == null) return;
+            if (error == SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS) listening.reject("permission");
+            else if (error == SpeechRecognizer.ERROR_NETWORK || error == SpeechRecognizer.ERROR_NETWORK_TIMEOUT) listening.reject("network");
+            else { finishListening(new ArrayList<>()); return; }
+            listening = null;
+        }
+        @Override public void onReadyForSpeech(Bundle params) {}
+        @Override public void onBeginningOfSpeech() {}
+        @Override public void onRmsChanged(float rmsdB) {}
+        @Override public void onBufferReceived(byte[] buffer) {}
+        @Override public void onEndOfSpeech() {}
+        @Override public void onPartialResults(Bundle partialResults) {}
+        @Override public void onEvent(int eventType, Bundle params) {}
+    };
 
     @PluginMethod
     public void keepAwake(PluginCall call) {

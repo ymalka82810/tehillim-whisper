@@ -64,8 +64,9 @@ document.body.classList.add(native ? 'is-native' : 'is-web');
 // ---------- Hebrew numerals ----------
 const ONES = ['', 'א', 'ב', 'ג', 'ד', 'ה', 'ו', 'ז', 'ח', 'ט'];
 const TENS = ['', 'י', 'כ', 'ל', 'מ', 'נ', 'ס', 'ע', 'פ', 'צ'];
+const HUNDREDS = ['', 'ק', 'ר', 'ש', 'ת', 'תק', 'תר', 'תש', 'תת', 'תתק'];
 function hebNum(n) {
-  let s = n >= 100 ? 'ק' : '';
+  let s = HUNDREDS[Math.floor(n / 100)];
   n %= 100;
   if (n === 15) s += 'טו';
   else if (n === 16) s += 'טז';
@@ -88,26 +89,46 @@ function makeRange(fromCh, toCh, fromV = 1, toV = chapters[toCh - 1].length) {
   return { start: [fromCh, fromV - 1], end: [toCh, toV - 1] };
 }
 
-function hebrewDay(date) {
-  return Number(new Intl.DateTimeFormat('en-u-ca-hebrew', { day: 'numeric' }).format(date));
+const chaptersLabel = (a, b) => a === b ? `פרק ${hebNum(a)}` : `פרקים ${hebNum(a)}–${hebNum(b)}`;
+
+// A segment is a range to read with its name; a reading plan is segments read one after another
+function chapterSegment(from, to = from) {
+  return { ...makeRange(from, to), label: chaptersLabel(from, to) };
 }
 
-function monthRange() {
+// day: 1–30, or 0 for the 29th of a short month, which also reads the 30th's chapters
+function monthSegment(day) {
+  if (!day) return { ...makeRange(140, 150), month: 0, label: 'יום כ״ט (חודש חסר) · פרקים קמ–קנ' };
+  const [a, av, b, bv] = MONTH[day - 1];
+  const label = a === b ? `פרק ${hebNum(a)} פסוקים ${hebNum(av)}–${hebNum(bv ?? chapters[b - 1].length)}` : chaptersLabel(a, b);
+  return { ...makeRange(a, b, av, bv), month: day, label: `יום ${hebNum(day)} בחודש · ${label}` };
+}
+
+function weekSegment(d) {
+  const [a, b] = WEEK[d];
+  return { ...makeRange(a, b), week: d, label: `יום ${WEEKDAYS[d]} · ${chaptersLabel(a, b)}` };
+}
+
+// The Hebrew date of the civil day (the app doesn't know when night falls)
+function hebrewDate(date) {
+  const parts = new Intl.DateTimeFormat('en-u-ca-hebrew', { day: 'numeric', year: 'numeric' }).formatToParts(date);
+  const part = type => Number(parts.find(p => p.type === type).value);
+  return { day: part('day'), year: part('year'), month: new Intl.DateTimeFormat('he-u-ca-hebrew', { month: 'long' }).format(date) };
+}
+const hebrewDay = date => hebrewDate(date).day;
+
+function todayMonth() {
   const now = new Date();
   const day = hebrewDay(now);
-  const tomorrow = new Date(now.getTime() + 86400000);
-  const shortMonthEnd = day === 29 && hebrewDay(tomorrow) === 1;
-  const [a, av, b, bv] = MONTH[day - 1];
-  if (shortMonthEnd) return { range: makeRange(140, 150), label: `יום כ״ט (חודש חסר) · פרקים קמ–קנ` };
-  const range = makeRange(a, b, av, bv);
-  const label = a === b ? `פרק ${hebNum(a)} פסוקים ${hebNum(av)}–${hebNum(bv ?? chapters[b - 1].length)}` : `פרקים ${hebNum(a)}–${hebNum(b)}`;
-  return { range, label: `יום ${hebNum(day)} בחודש · ${label}` };
+  const shortMonthEnd = day === 29 && hebrewDay(new Date(now.getTime() + 86400000)) === 1;
+  return monthSegment(shortMonthEnd ? 0 : day);
 }
+const todayWeek = () => weekSegment(new Date().getDay());
 
-function weekRange() {
-  const d = new Date().getDay();
-  const [a, b] = WEEK[d];
-  return { range: makeRange(a, b), label: `יום ${WEEKDAYS[d]} · פרקים ${hebNum(a)}–${hebNum(b)}` };
+function todayText() {
+  const now = new Date();
+  const { day, month, year } = hebrewDate(now);
+  return `יום ${WEEKDAYS[now.getDay()]} · ${hebNum(day)} ב${month} ${hebNum(year % 1000)} · ${now.getDate()}.${now.getMonth() + 1}.${now.getFullYear()}`;
 }
 
 // ---------- Stress ----------
@@ -195,6 +216,7 @@ const settings = {
   nikudSpeech: store.get('nikudSpeech', true),
   stressSpeech: store.get('stressSpeech', false),
   announce: store.get('announce', true),
+  chain: store.get('chain', []), // the reader's own sequence: [{ type: 'month' | 'week' } | { type: 'chapters', from, to }]
 };
 
 let voices = []; // [{ id, label, male }]
@@ -300,6 +322,66 @@ function bindSettings() {
   }
 }
 
+// ---------- My sequence ----------
+const CHAIN_TYPES = { month: 'תהילים יומי לפי החודש', week: 'תהילים יומי לפי השבוע' };
+const chainItemLabel = item => CHAIN_TYPES[item.type] || chaptersLabel(item.from, item.to);
+const chainPlan = () => settings.chain.map(item =>
+  item.type === 'month' ? todayMonth() : item.type === 'week' ? todayWeek() : chapterSegment(item.from, item.to));
+const chainStatus = () => `הרצף שלי · ${settings.chain.length} חלקים`;
+
+function saveChain(chain) {
+  settings.chain = chain;
+  store.set('chain', chain);
+  renderChain();
+  downloadInBackground();
+}
+
+function renderChain() {
+  const list = $('chainList');
+  list.innerHTML = '';
+  settings.chain.forEach((item, i) => {
+    const li = document.createElement('li');
+    const name = document.createElement('span');
+    name.textContent = chainItemLabel(item);
+    li.append(name);
+    const move = to => {
+      const chain = [...settings.chain];
+      chain.splice(to, 0, ...chain.splice(i, 1));
+      saveChain(chain);
+    };
+    for (const [text, label, action, disabled] of [
+      ['▲', 'הזזה למעלה', () => move(i - 1), i === 0],
+      ['▼', 'הזזה למטה', () => move(i + 1), i === settings.chain.length - 1],
+      ['✕', 'הסרה', () => saveChain(settings.chain.filter((_, j) => j !== i))],
+    ]) {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.textContent = text;
+      b.setAttribute('aria-label', label);
+      b.disabled = !!disabled;
+      b.onclick = action;
+      li.append(b);
+    }
+    list.append(li);
+  });
+  $('chainEmpty').hidden = settings.chain.length > 0;
+  $('chainBtn').hidden = !settings.chain.length;
+}
+
+function bindChain() {
+  const type = $('chainType'), from = $('chainFrom'), to = $('chainTo');
+  const showType = () => { $('chainChapters').hidden = type.value !== 'chapters'; };
+  type.onchange = showType;
+  from.onchange = () => { to.value = from.value; };
+  to.onchange = () => { if (Number(to.value) < Number(from.value)) from.value = to.value; };
+  $('chainAdd').onclick = () => {
+    const item = type.value === 'chapters' ? { type: 'chapters', from: Number(from.value), to: Number(to.value) } : { type: type.value };
+    saveChain([...settings.chain, item]);
+  };
+  showType();
+  renderChain();
+}
+
 // ---------- Recorded voices ----------
 // Every verse is pre-rendered (scripts/audio/render.py) with its stress taken from the te'amim.
 // A chapter is one file, its clips back to back (clip 0 announces the chapter); audio/index.json has their lengths.
@@ -389,10 +471,19 @@ async function chapterClips(voice, c) {
   return clips;
 }
 
-// Today's readings first, then where the reader is, then the rest in order
+const chaptersOf = r => Array.from({ length: r.end[0] - r.start[0] + 1 }, (_, i) => r.start[0] + i);
+
+// The ranges the reader picked, newest first: each new pick jumps to the head of the queue
+let picked = [];
+function prioritize(p) {
+  picked = [...new Set([...p.flatMap(chaptersOf), ...picked])];
+  downloadInBackground();
+}
+
+// The chosen plan from where the reader is, then earlier picks, the reader's sequence, today's readings, and the rest in order
 function downloadOrder() {
-  const chaptersOf = r => Array.from({ length: r.end[0] - r.start[0] + 1 }, (_, i) => r.start[0] + i);
-  const first = [...chaptersOf(monthRange().range), ...chaptersOf(weekRange().range)];
+  const first = pos ? [...chaptersOf({ start: pos, end: plan[seg].end }), ...plan.slice(seg + 1).flatMap(chaptersOf)] : [];
+  first.push(...picked, ...chainPlan().flatMap(chaptersOf), ...chaptersOf(todayMonth()), ...chaptersOf(todayWeek()));
   if (pos) first.push(...Array.from({ length: 150 - pos[0] + 1 }, (_, i) => pos[0] + i));
   return [...new Set([...first, ...Array.from({ length: 150 }, (_, i) => i + 1)])];
 }
@@ -505,7 +596,8 @@ const sleep = (s, token) => new Promise(resolve => {
 });
 
 // ---------- Player state ----------
-let range = null;
+let plan = []; // segments read one after another: [{ start, end, label }]
+let seg = 0; // the segment being read
 let pos = null; // [chapter(1-based), verse(0-based)]
 let playing = false;
 let runToken = 0;
@@ -518,6 +610,15 @@ function step(p, dir) {
   if (v < 0) { c--; if (c < 1) return null; v = chapters[c - 1].length - 1; }
   if (c > 150) return null;
   return [c, v];
+}
+// The next verse in the plan: through the segment, then on to the next one
+function advance(dir) {
+  const next = step(pos, dir);
+  const r = plan[seg];
+  if (next && cmp(next, r.start) >= 0 && cmp(next, r.end) <= 0) return { seg, pos: next };
+  const s = seg + dir;
+  if (s < 0 || s >= plan.length) return null;
+  return { seg: s, pos: [...(dir > 0 ? plan[s].start : plan[s].end)] };
 }
 function flatIndex(p) {
   let n = p[1];
@@ -532,11 +633,17 @@ function render() {
   const [c, v] = pos;
   $('where').textContent = `פרק ${hebNum(c)} · פסוק ${hebNum(v + 1)}`;
   $('verse').textContent = chapters[c - 1][v].replaceAll(STRESS, '');
-  const total = flatIndex(range.end) - flatIndex(range.start) + 1;
-  const done = flatIndex(pos) - flatIndex(range.start);
+  const r = plan[seg];
+  const sizes = plan.map(s => flatIndex(s.end) - flatIndex(s.start) + 1);
+  const total = sizes.reduce((a, b) => a + b, 0);
+  const done = sizes.slice(0, seg).reduce((a, b) => a + b, 0) + flatIndex(pos) - flatIndex(r.start);
   $('bar').style.width = `${(done / total) * 100}%`;
-  $('fromSel').value = range.start[0];
-  $('toSel').value = range.end[0];
+  $('segment').hidden = plan.length < 2;
+  $('segment').textContent = `חלק ${seg + 1} מתוך ${plan.length} · ${r.label}`;
+  $('fromSel').value = r.start[0];
+  $('toSel').value = r.end[0];
+  $('monthSel').value = 'month' in r ? r.month : '';
+  $('weekSel').value = 'week' in r ? r.week : '';
   if ('mediaSession' in navigator) {
     navigator.mediaSession.metadata = new MediaMetadata({
       title: `תהילים ${hebNum(c)}:${hebNum(v + 1)}`,
@@ -544,16 +651,18 @@ function render() {
       artwork: [{ src: 'icon.svg', sizes: 'any', type: 'image/svg+xml' }],
     });
   }
-  store.set('session', { range, pos });
+  store.set('session', { plan, seg, pos });
 }
 
-function setRange(r, label) {
+function setPlan(p, label = p.length === 1 ? p[0].label : '') {
   stop();
-  range = r;
-  pos = [...r.start];
+  plan = p;
+  seg = 0;
+  pos = [...p[0].start];
   render();
-  setStatus(label || '');
+  setStatus(label);
   $('resumeBtn').hidden = true;
+  prioritize(p);
 }
 
 async function run() {
@@ -562,13 +671,14 @@ async function run() {
   while (playing && token === runToken) {
     render();
     const [c, v] = pos;
-    if (settings.announce && v === 0 && lastChapter !== c) {
+    const chapter = `${seg}:${c}`; // a chapter that comes again later in the plan is announced again
+    if (settings.announce && v === 0 && lastChapter !== chapter) {
       setStatus('מכריז על הפרק');
       await say(c, 0);
       if (token !== runToken) return;
       await sleep(0.4, token);
     }
-    lastChapter = c;
+    lastChapter = chapter;
     setStatus('מקריא…');
     const duration = await say(c, v + 1);
     if (token !== runToken) return;
@@ -576,14 +686,14 @@ async function run() {
     if (settings.pause > 0) setStatus('תורך לומר…');
     await sleep(pause, token);
     if (token !== runToken) return;
-    const next = step(pos, 1);
-    if (!next || cmp(next, range.end) > 0) {
+    const next = advance(1);
+    if (!next) {
       stop();
       setStatus('סיימת. תזכו למצוות!');
       $('bar').style.width = '100%';
       return;
     }
-    pos = next;
+    ({ seg, pos } = next);
   }
 }
 
@@ -621,7 +731,7 @@ document.addEventListener('visibilitychange', () => {
 });
 
 function updatePlayButton() {
-  $('playBtn').textContent = playing ? '⏸' : '▶';
+  $('playBtn').classList.toggle('playing', playing);
   $('playBtn').setAttribute('aria-label', playing ? 'השהה' : 'נגן');
   if ('mediaSession' in navigator) navigator.mediaSession.playbackState = playing ? 'playing' : 'paused';
 }
@@ -648,35 +758,169 @@ function stop() {
 
 function jump(dir) {
   if (!pos) return;
-  const next = step(pos, dir);
-  if (!next || cmp(next, range.start) < 0 || cmp(next, range.end) > 0) return;
-  pos = next;
+  const next = advance(dir);
+  if (!next) return;
+  ({ seg, pos } = next);
   runToken++;
   cancelSpeech();
   render();
   if (playing) run();
 }
 
+// ---------- Voice commands ----------
+// "עבור / החלף / חזור ל(פרק) <chapter>", "פסוק הבא", "פסוק קודם". The chapter may come back from the
+// recognizer as digits (121), letters (קכ"א), letter names (קוף כף אלף) or number words (מאה עשרים ואחת).
+const GEMATRIA = { א: 1, ב: 2, ג: 3, ד: 4, ה: 5, ו: 6, ז: 7, ח: 8, ט: 9, י: 10, כ: 20, ל: 30, מ: 40, נ: 50, ס: 60,
+  ע: 70, פ: 80, צ: 90, ק: 100 };
+const SPOKEN_LETTERS = { אלף: 'א', בית: 'ב', גימל: 'ג', דלת: 'ד', הא: 'ה', הי: 'ה', היי: 'ה', וו: 'ו', ואו: 'ו', זין: 'ז',
+  זיין: 'ז', חית: 'ח', חת: 'ח', טית: 'ט', טת: 'ט', יוד: 'י', כף: 'כ', כאף: 'כ', למד: 'ל', מם: 'מ', נון: 'נ', סמך: 'ס',
+  עין: 'ע', עיין: 'ע', פא: 'פ', פה: 'פ', פי: 'פ', צדי: 'צ', צדיק: 'צ', קוף: 'ק' };
+const NUMBER_WORDS = { אחד: 1, אחת: 1, שניים: 2, שנים: 2, שתיים: 2, שתים: 2, שני: 2, שתי: 2, שלוש: 3, שלושה: 3, שלש: 3,
+  שלשה: 3, ארבע: 4, ארבעה: 4, חמש: 5, חמישה: 5, חמשה: 5, שש: 6, שישה: 6, ששה: 6, שבע: 7, שבעה: 7, שמונה: 8, תשע: 9,
+  תשעה: 9, עשר: 10, עשרה: 10, עשרים: 20, שלושים: 30, שלשים: 30, ארבעים: 40, חמישים: 50, חמשים: 50, שישים: 60, ששים: 60,
+  שבעים: 70, שמונים: 80, תשעים: 90, מאה: 100 };
+
+// Hebrew letters as a chapter number, only in their usual spelling (so a stray word isn't read as a number)
+function lettersToNumber(s) {
+  const letters = [...s.replace(/[ךםןףץ]/g, l => FINAL_FORMS[l])];
+  if (!letters.length || letters.some(l => !GEMATRIA[l])) return null;
+  const n = letters.reduce((sum, l) => sum + GEMATRIA[l], 0);
+  return hebNum(n).replace(/[׳״]/g, '') === letters.join('') ? n : null;
+}
+
+function spokenChapter(s) {
+  const words = s.split(' ').filter(Boolean);
+  let n = null;
+  if (/^\d+$/.test(s)) n = Number(s);
+  else if (words.length === 1) n = lettersToNumber(s);
+  if (!n && words.every(w => SPOKEN_LETTERS[w])) n = lettersToNumber(words.map(w => SPOKEN_LETTERS[w]).join(''));
+  // Hebrew cardinals are a plain sum: מאה עשרים ואחת = 100 + 20 + 1, חמש עשרה = 5 + 10
+  const values = words.map(w => NUMBER_WORDS[w] ?? NUMBER_WORDS[w.replace(/^ו/, '')]);
+  if (!n && values.every(Boolean)) n = values.reduce((a, b) => a + b, 0);
+  return n >= 1 && n <= 150 ? n : null;
+}
+
+function parseCommand(heard) {
+  const t = heard.replace(/["'״׳.,!?]/g, '').replace(/[-־]/g, ' ').replace(/\s+/g, ' ').trim();
+  const verse = t.match(/פסוק (ה?בא|ה?קודם)/);
+  if (verse) return { dir: verse[1].endsWith('בא') ? 1 : -1 };
+  const go = t.match(/(?:^| )(?:ת|ל)?(?:עבור|חזור|החלף|החליף|חליף) (.+)$/);
+  if (!go) return null;
+  const rest = go[1].replace(/^(?:אל |ל ?)?פרק /, '');
+  // "לקכא" is ל + קכא, but "למד" is the chapter itself: try the words as heard first
+  const chapter = spokenChapter(rest) || spokenChapter(rest.replace(/^(?:אל |ל ?)/, ''));
+  return chapter ? { chapter } : null;
+}
+
+// Within the plan when the chapter is in it (the current segment first), otherwise just that chapter
+function goToChapter(c) {
+  const has = i => c >= plan[i].start[0] && c <= plan[i].end[0];
+  const at = has(seg) ? seg : plan.findIndex((_, i) => has(i));
+  if (at >= 0) {
+    stop();
+    seg = at;
+    pos = c === plan[at].start[0] ? [...plan[at].start] : [c, 0];
+    render();
+  } else {
+    setPlan([chapterSegment(c)]);
+  }
+  setStatus(`פרק ${hebNum(c)}`);
+}
+
+const WebRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+const canListen = !!native || !!WebRecognition;
+
+// What the reader said, as the recognizer's guesses (best first)
+function recognize() {
+  if (native) return native.listen().then(r => r.matches || []);
+  return new Promise((resolve, reject) => {
+    const r = new WebRecognition();
+    r.lang = 'he-IL';
+    r.maxAlternatives = 5;
+    let heard = [];
+    r.onresult = e => { heard = [...e.results[0]].map(a => a.transcript); };
+    r.onerror = e => reject(new Error(/not-allowed/.test(e.error) ? 'permission' : e.error));
+    r.onend = () => resolve(heard);
+    r.start();
+  });
+}
+
+let listening = false;
+async function listenForCommand() {
+  if (listening || !pos) return;
+  const resume = playing;
+  stop(); // the recognizer would hear the reading
+  listening = true;
+  $('micBtn').classList.add('listening');
+  setStatus('מקשיב… אמרו למשל "עבור לפרק כג" או "פסוק הבא"');
+  let heard = [];
+  try {
+    heard = await recognize();
+  } catch (e) {
+    setStatus(e.message === 'permission' ? 'צריך לאשר גישה למיקרופון כדי לתת פקודות קוליות'
+      : /network/.test(e.message) ? 'זיהוי הדיבור דורש חיבור לאינטרנט' : 'זיהוי הדיבור לא זמין');
+    heard = null;
+  } finally {
+    listening = false;
+    $('micBtn').classList.remove('listening');
+  }
+  const command = heard?.map(parseCommand).find(Boolean);
+  if (command?.chapter) goToChapter(command.chapter);
+  else if (command) jump(command.dir);
+  else if (heard) setStatus(heard.length ? `לא הבנתי: "${heard[0]}"` : 'לא נשמעה פקודה');
+  if (resume) play();
+}
+
 // ---------- Wiring ----------
-for (const id of ['fromSel', 'toSel']) {
+for (const id of ['fromSel', 'toSel', 'chainFrom', 'chainTo']) {
   const sel = $(id);
   for (let c = 1; c <= 150; c++) sel.add(new Option(`${hebNum(c)} (${c})`, c));
 }
 $('fromSel').onchange = () => {
   const from = Number($('fromSel').value);
   const to = Math.max(from, Number($('toSel').value));
-  setRange(makeRange(from, to));
+  setPlan([chapterSegment(from, to)]);
 };
 $('toSel').onchange = () => {
   const to = Number($('toSel').value);
   const from = Math.min(to, Number($('fromSel').value));
-  setRange(makeRange(from, to));
+  setPlan([chapterSegment(from, to)]);
 };
-$('todayMonthBtn').onclick = () => { const { range, label } = monthRange(); setRange(range, label); };
-$('todayWeekBtn').onclick = () => { const { range, label } = weekRange(); setRange(range, label); };
+$('monthSel').onchange = e => { if (e.target.value !== '') setPlan([monthSegment(Number(e.target.value))]); };
+$('weekSel').onchange = e => { if (e.target.value !== '') setPlan([weekSegment(Number(e.target.value))]); };
+$('todayMonthBtn').onclick = () => setPlan([todayMonth()]);
+$('todayWeekBtn').onclick = () => setPlan([todayWeek()]);
+$('chainBtn').onclick = () => setPlan(chainPlan(), chainStatus());
+
+// The date line and the "(היום)" marks follow the calendar while the app stays open
+let shownDate = '';
+function refreshToday() {
+  const text = todayText();
+  if (text === shownDate) return;
+  shownDate = text;
+  $('today').textContent = text;
+  const today = todayMonth().month, weekday = new Date().getDay();
+  const mark = (d, t) => d === t ? ' (היום)' : '';
+  const month = $('monthSel'), week = $('weekSel');
+  month.innerHTML = '';
+  week.innerHTML = '';
+  month.add(new Option('בחרו יום', ''));
+  week.add(new Option('בחרו יום', ''));
+  for (let d = 1; d <= 30; d++) {
+    month.add(new Option(`${hebNum(d)} בחודש${mark(d, today)}`, d));
+    if (d === 29) month.add(new Option(`כ״ט בחודש חסר${mark(0, today)}`, 0));
+  }
+  WEEKDAYS.forEach((name, d) => week.add(new Option(`יום ${name}${mark(d, weekday)}`, d)));
+  if (pos) render();
+}
+refreshToday();
+setInterval(refreshToday, 60000);
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') refreshToday(); });
 $('playBtn').onclick = () => (playing ? stop() : play());
 $('nextBtn').onclick = () => jump(1);
 $('prevBtn').onclick = () => jump(-1);
+$('micBtn').hidden = !canListen;
+$('micBtn').onclick = listenForCommand;
 
 if ('mediaSession' in navigator) {
   navigator.mediaSession.setActionHandler('play', play);
@@ -687,26 +931,30 @@ if ('mediaSession' in navigator) {
 
 if (!native) speechSynthesis.onvoiceschanged = loadVoices;
 bindSettings();
+bindChain();
 
 const saved = store.get('session', null);
-if (saved?.range && saved?.pos) {
+const savedPlan = saved?.plan || (saved?.range && [saved.range]); // older versions saved a single range
+if (savedPlan && saved?.pos) {
   $('resumeBtn').hidden = false;
   $('resumeBtn').textContent = `המשך מפרק ${hebNum(saved.pos[0])} פסוק ${hebNum(saved.pos[1] + 1)}`;
   $('resumeBtn').onclick = () => {
     stop();
-    range = saved.range;
+    plan = savedPlan;
+    seg = saved.seg || 0;
     pos = saved.pos;
     render();
     setStatus('');
     $('resumeBtn').hidden = true;
+    prioritize(plan);
   };
 }
 {
-  const { range: r, label } = monthRange();
-  range = r;
-  pos = [...r.start];
+  // Open on the reader's sequence when there is one, otherwise on today's reading by the month
+  plan = settings.chain.length ? chainPlan() : [todayMonth()];
+  pos = [...plan[0].start];
   render();
-  setStatus(label);
+  setStatus(settings.chain.length ? chainStatus() : plan[0].label);
   if (saved) store.set('session', saved);
 }
 

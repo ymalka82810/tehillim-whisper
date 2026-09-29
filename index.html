@@ -47,7 +47,12 @@
   </div>
   <header>
     <h1>תהילים בדרך</h1>
-    <button id="settingsBtn" class="icon-btn" aria-label="הגדרות">⚙</button>
+    <div class="header-btns">
+      <button id="micBtn" class="icon-btn" aria-label="פקודה קולית" hidden>
+        <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+      </button>
+      <button id="settingsBtn" class="icon-btn" aria-label="הגדרות">⚙</button>
+    </div>
   </header>
 
   <div id="updateBanner" class="update" hidden>
@@ -56,10 +61,16 @@
   </div>
 
   <section class="picker">
+    <div id="today" class="today"></div>
     <div class="quick">
       <button id="todayMonthBtn">יומי (לפי החודש)</button>
       <button id="todayWeekBtn">יומי (לפי השבוע)</button>
+      <button id="chainBtn" hidden>הרצף שלי</button>
       <button id="resumeBtn" hidden>המשך מהמקום שעצרת</button>
+    </div>
+    <div class="range">
+      <label>לפי יום בחודש <select id="monthSel"></select></label>
+      <label>לפי יום בשבוע <select id="weekSel"></select></label>
     </div>
     <div class="range">
       <label>מפרק <select id="fromSel"></select></label>
@@ -68,6 +79,7 @@
   </section>
 
   <main>
+    <div id="segment" class="segment" hidden></div>
     <div id="where" class="where"></div>
     <p id="verse" class="verse"></p>
     <div id="status" class="status" aria-live="polite"></div>
@@ -75,9 +87,12 @@
   </main>
 
   <nav class="controls" dir="ltr">
-    <button id="prevBtn" class="ctl" aria-label="פסוק קודם">⏮</button>
-    <button id="playBtn" class="ctl play" aria-label="נגן">▶</button>
-    <button id="nextBtn" class="ctl" aria-label="פסוק הבא">⏭</button>
+    <button id="nextBtn" class="ctl" aria-label="פסוק הבא"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="5.5" width="2.6" height="13" rx="1"/><path d="M19 6.4v11.2a1 1 0 0 1-1.55.83L9.6 13.25a1.5 1.5 0 0 1 0-2.5l7.85-5.18A1 1 0 0 1 19 6.4z"/></svg></button>
+    <button id="playBtn" class="ctl play" aria-label="נגן">
+      <svg class="icon-play" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.5v13a1 1 0 0 0 1.5.86l10.2-6.5a1 1 0 0 0 0-1.72L9.5 4.64A1 1 0 0 0 8 5.5z"/></svg>
+      <svg class="icon-pause" viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="5" width="4.5" height="14" rx="1"/><rect x="13.5" y="5" width="4.5" height="14" rx="1"/></svg>
+    </button>
+    <button id="prevBtn" class="ctl" aria-label="פסוק קודם"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="5.5" width="2.6" height="13" rx="1"/><path d="M19 6.4v11.2a1 1 0 0 1-1.55.83L9.6 13.25a1.5 1.5 0 0 1 0-2.5l7.85-5.18A1 1 0 0 1 19 6.4z"/></svg></button>
   </nav>
 
   <dialog id="settings">
@@ -128,6 +143,24 @@
       </label>
       <p class="hint">0 = הקראה רצופה בלי הפסקה. 1 = הפסקה באורך הפסוק.</p>
       <label class="check"><input id="announce" type="checkbox"> להכריז על תחילת כל פרק</label>
+      <section class="chain">
+        <h3>הרצף שלי</h3>
+        <p class="hint">חלקים שיוקראו ברצף אחד אחרי השני, בכפתור "הרצף שלי". האפליקציה נפתחת על הרצף. תהילים יומי מתעדכן לפי התאריך של אותו יום.</p>
+        <ol id="chainList"></ol>
+        <p id="chainEmpty" class="hint">עדיין לא נוספו חלקים.</p>
+        <label>להוסיף לרצף
+          <select id="chainType">
+            <option value="month">תהילים יומי לפי החודש</option>
+            <option value="week">תהילים יומי לפי השבוע</option>
+            <option value="chapters">פרק או פרקים</option>
+          </select>
+        </label>
+        <div id="chainChapters" class="range">
+          <label>פרק <select id="chainFrom"></select></label>
+          <label>עד פרק <select id="chainTo"></select></label>
+        </div>
+        <button id="chainAdd" type="button">הוספה לרצף</button>
+      </section>
       <button id="testVoice" type="button">בדיקת קול</button>
       <div class="native-only version-row">
         <span id="versionText"></span>
