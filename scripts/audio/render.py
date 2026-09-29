@@ -66,39 +66,24 @@ def verse_ipa(verse):
     return phonemize(" ".join(mark_vocal_shva(divine_name(w)) for w in t.split()))
 
 
-# Chapter announcement: "פרק" and the number in words
-ONES = ["", "אַחַת", "שְׁתַּ֫יִם", "שָׁלוֹשׁ", "אַרְבַּע", "חָמֵשׁ", "שֵׁשׁ", "שֶׁ֫בַע", "שְׁמוֹנֶה", "תֵּ֫שַׁע"]
-TEENS = ["עֶ֫שֶׂר", "אַחַת עֶשְׂרֵה", "שְׁתֵּים עֶשְׂרֵה", "שְׁלוֹשׁ עֶשְׂרֵה", "אַרְבַּע עֶשְׂרֵה", "חֲמֵשׁ עֶשְׂרֵה",
-         "שֵׁשׁ עֶשְׂרֵה", "שְׁבַע עֶשְׂרֵה", "שְׁמוֹנֶה עֶשְׂרֵה", "תְּשַׁע עֶשְׂרֵה"]
-TENS = ["", "", "עֶשְׂרִים", "שְׁלוֹשִׁים", "אַרְבָּעִים", "חֲמִשִּׁים", "שִׁשִּׁים", "שִׁבְעִים", "שְׁמוֹנִים", "תִּשְׁעִים"]
+# Chapter announcement: "פרק" and the chapter's letters by name
+LETTER_NAMES = {"א": "אָ֫לֶף", "ב": "בֵּית", "ג": "גִּ֫ימֶל", "ד": "דָּ֫לֶת", "ה": "הֵא", "ו": "וָו", "ז": "זַ֫יִן",
+                "ח": "חֵית", "ט": "טֵית", "י": "יוּד", "כ": "כָּף", "ל": "לָ֫מֶד", "מ": "מֵם", "נ": "נוּן",
+                "ס": "סָ֫מֶךְ", "ע": "עַ֫יִן", "פ": "פֵּא", "צ": "צָ֫דִי", "ק": "קוּף"}
 
 
-def and_(word):
-    """The conjunction vav: u- before bumaf and sheva, va- before hataf patah, else ve-."""
-    if word[1] == "ֲ":
-        return "וַ" + word
-    return ("וּ" if word[0] in "בפמ" or SHVA in word[1:3] else "וְ") + word.replace(DAGESH, "", 1 if word[1] == DAGESH else 0)
-
-
-def number_words(n):
+def chapter_letters(n):
+    """The chapter's Hebrew numeral as in hebNum() in app.js, without the geresh: 119 -> קיט."""
     hundred, n = divmod(n, 100)
-    if n < 10:
-        rest = ONES[n]
-    elif n < 20:
-        rest = TEENS[n - 10]
-    else:
-        rest = TENS[n // 10] + (" " + and_(ONES[n % 10]) if n % 10 else "")
-    if not hundred:
-        return rest
-    if not rest:
-        return "מֵ֫אָה"
-    # "מאה ושלוש", "מאה ועשרים", but "מאה עשרים ושלוש"
-    return "מֵ֫אָה " + (rest if " " in rest and n >= 20 else and_(rest))
+    s = "ק" * hundred
+    if n in (15, 16):
+        return s + ("טו" if n == 15 else "טז")
+    return s + " יכלמנסעפצ"[n // 10].strip() + " אבגדהוזחט"[n % 10].strip()
 
 
 def announcement_ipa(chapter):
-    # Numbers are said the everyday way (shtayim, shloshim), so no vocal sheva is marked
-    return phonemize("פֶּ֫רֶק " + number_words(chapter))
+    # The chapter is called by its letters, as it is written: "פרק קוף יוד טית"
+    return phonemize("פֶּ֫רֶק " + " ".join(LETTER_NAMES[c] for c in chapter_letters(chapter)))
 
 
 # ---------- Rendering ----------

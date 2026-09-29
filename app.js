@@ -454,7 +454,14 @@ async function say(c, i) {
   const voice = recordedVoice();
   const clips = voice && await chapterClips(voice, c);
   if (clips?.[i]) return playClip(clips[i]);
-  return speak(i ? speakable(chapters[c - 1][i - 1], settings.nikudSpeech) : `פרק ${c}`);
+  return speak(i ? speakable(chapters[c - 1][i - 1], settings.nikudSpeech) : `פרק ${chapterName(c)}`);
+}
+
+// The chapter as it is called, by the names of its letters: 119 -> "קוף יוד טית"
+const LETTER_NAMES = { א: 'אָלֶף', ב: 'בֵּית', ג: 'גִּימֶל', ד: 'דָּלֶת', ה: 'הֵא', ו: 'וָו', ז: 'זַיִן', ח: 'חֵית', ט: 'טֵית',
+  י: 'יוּד', כ: 'כָּף', ל: 'לָמֶד', מ: 'מֵם', נ: 'נוּן', ס: 'סָמֶךְ', ע: 'עַיִן', פ: 'פֵּא', צ: 'צָדִי', ק: 'קוּף' };
+function chapterName(c) {
+  return [...hebNum(c).replace(/[׳״]/g, '')].map(l => LETTER_NAMES[l]).join(' ');
 }
 
 let liveUtterance = null; // keep a reference: Chrome drops events of garbage-collected utterances
