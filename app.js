@@ -6,7 +6,53 @@ const store = {
   set(key, value) { try { localStorage.setItem(key, JSON.stringify(value)); } catch {} },
 };
 
-const chapters = await (await fetch('data/tehillim.json')).json();
+// ---------- Splash ----------
+// The shown percentage chases the real loading progress, but never runs faster than MIN_MS,
+// so a fast (cached) start still reads as a smooth 0→100 rather than a flash.
+const splash = (() => {
+  const MIN_MS = 1200;
+  const started = performance.now();
+  let target = 0, shown = 0, finished;
+  const done = new Promise(r => { finished = r; });
+  const frame = () => {
+    const cap = (performance.now() - started) / MIN_MS * 100;
+    shown = Math.min(target, cap, shown + Math.max(0.4, (Math.min(target, cap) - shown) * 0.12));
+    const pct = Math.floor(shown);
+    $('splashBar').style.width = `${shown}%`;
+    $('splashPct').textContent = `${pct}%`;
+    $('splash').setAttribute('aria-valuenow', pct);
+    if (shown < 100) return requestAnimationFrame(frame);
+    setTimeout(() => {
+      $('splash').classList.add('done');
+      document.querySelector('meta[name=theme-color]').content = '#14161b';
+      setTimeout(() => { $('splash').remove(); finished(); }, 450);
+    }, 250);
+  };
+  requestAnimationFrame(frame);
+  // Never trap the user behind the splash if something fails while loading
+  setTimeout(() => { target = 100; }, 8000);
+  return { set: p => { target = Math.max(target, p); }, done };
+})();
+
+async function fetchWithProgress(url, onProgress) {
+  const res = await fetch(url);
+  const total = Number(res.headers.get('content-length')) || 330000; // no header → the data file's approximate size
+  if (!res.body) return res.json();
+  const reader = res.body.getReader();
+  const parts = [];
+  let received = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    parts.push(value);
+    received += value.length;
+    onProgress(Math.min(1, received / total));
+  }
+  return JSON.parse(await new Blob(parts).text());
+}
+
+const chapters = await fetchWithProgress('data/tehillim.json', f => splash.set(f * 70));
+splash.set(75);
 
 // In the Android app, the WebView has no speechSynthesis, so speech goes through the native plugin.
 // @capacitor/core isn't bundled, so call the plugin through the injected native bridge directly.
@@ -64,11 +110,69 @@ function weekRange() {
   return { range: makeRange(a, b), label: `יום ${WEEKDAYS[d]} · פרקים ${hebNum(a)}–${hebNum(b)}` };
 }
 
+// ---------- Stress ----------
+// The data marks the stressed letter of mil'el words (taken from the te'amim) with U+05AB.
+// Speech engines ignore marks in plain text, but follow an IPA transcription given in SSML <phoneme>.
+const STRESS = '֫';
+const CONSONANTS = {
+  'א': '', 'ב': 'v', 'ג': 'g', 'ד': 'd', 'ה': 'h', 'ו': 'v', 'ז': 'z', 'ח': 'χ', 'ט': 't', 'י': 'j', 'כ': 'χ', 'ך': 'χ',
+  'ל': 'l', 'מ': 'm', 'ם': 'm', 'נ': 'n', 'ן': 'n', 'ס': 's', 'ע': '', 'פ': 'f', 'ף': 'f', 'צ': 'ts', 'ץ': 'ts', 'ק': 'k',
+  'ר': 'ʁ', 'ש': 'ʃ', 'ת': 't',
+};
+const WITH_DAGESH = { 'ב': 'b', 'כ': 'k', 'ך': 'k', 'פ': 'p', 'ף': 'p' };
+const VOWELS = {
+  'ֱ': 'e', 'ֲ': 'a', 'ֳ': 'o', 'ִ': 'i', 'ֵ': 'e', 'ֶ': 'e', 'ַ': 'a', 'ָ': 'a',
+  'ֹ': 'o', 'ֺ': 'o', 'ֻ': 'u', 'ׇ': 'o',
+};
+const FINAL_FORMS = { 'ך': 'כ', 'ם': 'מ', 'ן': 'נ', 'ף': 'פ', 'ץ': 'צ' };
+
+// Pointed word -> IPA with the stress mark (modern Israeli pronunciation)
+function ipa(word) {
+  const letters = word.match(/[א-ת][^א-ת]*/g) || [];
+  const last = letters.length - 1;
+  const vowel = c => [...c].map(m => VOWELS[m]).find(Boolean) || '';
+  const has = (c, mark) => c.includes(mark);
+  const shuruk = i => letters[i][0] === 'ו' && has(letters[i], 'ּ') && !vowel(letters[i]) && (i === 0 || !vowel(letters[i - 1]));
+  const holamMale = i => letters[i][0] === 'ו' && /[ֹֺ]/.test(letters[i]) && i > 0 && !vowel(letters[i - 1]);
+  const bare = i => !/[ְ-ׇֻ]/.test(letters[i]);
+  let silentSheva = false;
+  const sounds = letters.map((c, i) => {
+    const L = c[0], prev = letters[i - 1] || '';
+    if (shuruk(i)) return ['', 'u'];
+    if (holamMale(i)) return ['', 'o'];
+    let cons = (has(c, 'ּ') && WITH_DAGESH[L]) || (L === 'ש' && has(c, 'ׂ') ? 's' : CONSONANTS[L]);
+    let v = vowel(c);
+    if (L === 'י' && bare(i) && (/[ie]$/.test(vowel(prev)) || (i < last && letters[i + 1] === 'ו' && i + 1 === last))) cons = '';
+    if (L === 'ה' && i === last && !has(c, 'ּ')) cons = '';
+    if (i === last && i > 0 && v === 'a' && /[חע]|ה.*ּ/.test(c) && (/[iou]/.test(vowel(prev)) || has(prev, 'ֵ') || shuruk(i - 1) || holamMale(i - 1) || (/[יו]/.test(prev[0]) && bare(i - 1)))) {
+      return ['a' + cons, '']; // furtive patach
+    }
+    if (has(c, 'ְ')) {
+      const next = letters[i + 1];
+      const vocal = i < last && (i === 0 || silentSheva || (has(c, 'ּ') && vowel(prev))
+        || (FINAL_FORMS[next[0]] || next[0]) === L);
+      silentSheva = !vocal;
+      v = vocal ? 'e' : '';
+    } else silentSheva = false;
+    return [cons, v];
+  });
+  const s = letters.findIndex(c => has(c, STRESS));
+  const onset = s > 0 && !sounds[s][0] && (shuruk(s) || holamMale(s)) ? s - 1 : s;
+  return sounds.map(([c, v], i) => (i === onset ? 'ˈ' : '') + c + v).join('');
+}
+
 // ---------- Speech text ----------
 const MARKS = /[ְ-ׇ]/g;
 function speakable(text, withNikud) {
   let t = text.replace(/׃/g, '').replace(/־/g, ' ');
+  // Browsers don't pass SSML to the engine (Chrome and Edge read the tags aloud), so this is for the app only
+  const stressed = native && settings.stressSpeech && t.includes(STRESS);
   t = t.split(' ').map(word => {
+    if (stressed && word.includes(STRESS)) {
+      const shown = word.replaceAll(STRESS, '');
+      return `<phoneme alphabet="ipa" ph="${ipa(word)}">${withNikud ? shown : shown.replace(MARKS, '')}</phoneme>`;
+    }
+    word = word.replaceAll(STRESS, '');
     const letters = word.replace(MARKS, '');
     const m = letters.match(/^([ובלכמשה]{0,2})יהוה$/);
     if (!m) return word;
@@ -77,19 +181,24 @@ function speakable(text, withNikud) {
     return prefix + (elohim ? 'אֱלֹהִים' : 'אֲדֹנָי');
   }).join(' ');
   t = t.replace(/ׇ/g, 'ֹ');
-  return withNikud ? t : t.replace(MARKS, '');
+  if (!withNikud) t = t.replace(MARKS, '');
+  return stressed ? `<speak>${t}</speak>` : t;
 }
 
 // ---------- Settings ----------
 const settings = {
   voiceURI: store.get('voiceURI', null),
+  gender: store.get('gender', 'female'),
   rate: store.get('rate', 0.9),
   pause: store.get('pause', 1),
   nikudSpeech: store.get('nikudSpeech', true),
+  stressSpeech: store.get('stressSpeech', false),
   announce: store.get('announce', true),
 };
 
-let voices = []; // [{ id, label }]
+let voices = []; // [{ id, label, male }]
+const MALE_VOICE = /\b(avri|asaf|male)\b/i; // known male Hebrew voices (Microsoft); Android voices don't expose gender
+const MALE_PITCH = 0.7; // no real male voice on the device: lower the pitch instead
 let voiceHealth = null;
 
 async function loadVoices() {
@@ -101,7 +210,10 @@ async function loadVoices() {
   } else {
     voices = speechSynthesis.getVoices()
       .filter(v => /^(he|iw)/i.test(v.lang))
-      .map(v => ({ id: v.voiceURI, label: `${v.name}${v.localService ? '' : ' (דורש אינטרנט)'}`, voice: v }));
+      .map(v => {
+        const male = MALE_VOICE.test(v.name) && !/female/i.test(v.name);
+        return { id: v.voiceURI, label: `${v.name}${male ? ' (גבר)' : ''}${v.localService ? '' : ' (דורש אינטרנט)'}`, voice: v, male };
+      });
   }
   const sel = $('voiceSel');
   sel.innerHTML = '';
@@ -110,7 +222,9 @@ async function loadVoices() {
   if (currentVoice()) sel.value = currentVoice().id;
   renderVoiceHealth();
 }
-const currentVoice = () => voices.find(v => v.id === settings.voiceURI) || voices[0] || null;
+const currentVoice = () => voices.find(v => v.id === settings.voiceURI)
+  || voices.find(v => !!v.male === (settings.gender === 'male')) || voices[0] || null;
+const currentPitch = () => settings.gender === 'male' && !currentVoice()?.male ? MALE_PITCH : 1;
 
 function voiceProblem() {
   if (!native) return !voices.length && speechSynthesis.getVoices().length
@@ -139,7 +253,9 @@ function bindSettings() {
   rate.value = settings.rate;
   pause.value = settings.pause;
   $('nikudSpeech').checked = settings.nikudSpeech;
+  $('stressSpeech').checked = settings.stressSpeech;
   $('announce').checked = settings.announce;
+  $('gender').value = settings.gender;
   const show = () => {
     $('rateOut').textContent = `×${Number(settings.rate).toFixed(2)}`;
     $('pauseOut').textContent = Number(settings.pause) === 0 ? 'ללא' : `×${Number(settings.pause).toFixed(1)}`;
@@ -149,8 +265,19 @@ function bindSettings() {
   rate.oninput = () => save('rate', Number(rate.value));
   pause.oninput = () => save('pause', Number(pause.value));
   $('nikudSpeech').onchange = e => save('nikudSpeech', e.target.checked);
+  $('stressSpeech').onchange = e => save('stressSpeech', e.target.checked);
   $('announce').onchange = e => save('announce', e.target.checked);
   $('voiceSel').onchange = e => save('voiceURI', e.target.value);
+  $('gender').onchange = e => {
+    save('gender', e.target.value);
+    // Switch to a real voice of the chosen gender when the device has one
+    const male = settings.gender === 'male';
+    const match = voices.find(v => !!v.male === male);
+    if (match && !!currentVoice()?.male !== male) {
+      save('voiceURI', match.id);
+      $('voiceSel').value = match.id;
+    }
+  };
   $('settingsBtn').onclick = () => $('settings').showModal();
   $('testVoice').onclick = () => { cancelSpeech(); speak(speakable(chapters[22][0], settings.nikudSpeech)); };
   if (native) {
@@ -166,7 +293,7 @@ async function speak(text) {
   if (native) {
     const started = performance.now();
     try {
-      await native.speak({ text, rate: settings.rate, voice: currentVoice()?.id || '' });
+      await native.speak({ text, rate: settings.rate, pitch: currentPitch(), voice: currentVoice()?.id || '' });
     } catch {
       renderVoiceHealth();
       await new Promise(r => setTimeout(r, 1000));
@@ -179,6 +306,7 @@ async function speak(text) {
     const voice = currentVoice()?.voice;
     if (voice) u.voice = voice;
     u.rate = settings.rate;
+    u.pitch = currentPitch();
     let started = performance.now();
     u.onstart = () => { started = performance.now(); };
     u.onend = u.onerror = () => resolve((performance.now() - started) / 1000);
@@ -225,7 +353,7 @@ function render() {
   if (!pos) return;
   const [c, v] = pos;
   $('where').textContent = `פרק ${hebNum(c)} · פסוק ${hebNum(v + 1)}`;
-  $('verse').textContent = chapters[c - 1][v];
+  $('verse').textContent = chapters[c - 1][v].replaceAll(STRESS, '');
   const total = flatIndex(range.end) - flatIndex(range.start) + 1;
   const done = flatIndex(pos) - flatIndex(range.start);
   $('bar').style.width = `${(done / total) * 100}%`;
@@ -404,7 +532,10 @@ if (saved?.range && saved?.pos) {
   if (saved) store.set('session', saved);
 }
 
+splash.set(85);
 await loadVoices();
+splash.set(100);
+await splash.done;
 if (native && voiceProblem()) $('settings').showModal();
 
 // ---------- App updates (APK only) ----------

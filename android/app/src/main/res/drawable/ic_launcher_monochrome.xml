@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- King David's lyre; kept inside the 66dp adaptive-icon safe zone -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <group android:pivotX="54" android:pivotY="55" android:scaleX="1.08" android:scaleY="1.08">
+        <path android:pathData="M45,38.6V72M48,38.2V72M51,38V72M54,37.9V72M57,38V72M60,38.2V72M63,38.6V72"
+            android:strokeWidth="1.15" android:strokeLineCap="round" android:strokeColor="#FF000000" />
+        <path android:pathData="M44,74C35,68 30.5,58 34,48C36.5,41 35.5,35.5 32,33M64,74C73,68 77.5,58 74,48C71.5,41 72.5,35.5 76,33"
+            android:strokeWidth="4.2" android:strokeLineCap="round" android:strokeLineJoin="round" android:strokeColor="#FF000000" />
+        <path android:pathData="M35.5,40.5Q54,34.5 72.5,40.5"
+            android:strokeWidth="3.6" android:strokeLineCap="round" android:strokeColor="#FF000000" />
+        <path android:pathData="M43.5,71H64.5A4.5,4.5 0,0 1,64.5 80H43.5A4.5,4.5 0,0 1,43.5 71Z" android:fillColor="#FF000000" />
+    </group>
+</vector>

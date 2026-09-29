@@ -3,6 +3,11 @@
   "appName": "תהילים בדרך",
   "webDir": "www",
   "android": {
-    "backgroundColor": "#14161b"
+    "backgroundColor": "#141b36"
+  },
+  "plugins": {
+    "SystemBars": {
+      "style": "DARK"
+    }
   }
 }

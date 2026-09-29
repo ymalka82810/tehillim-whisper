@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#14161b">
+  <meta name="theme-color" content="#141b36">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -14,6 +14,33 @@
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
+  <div id="splash" role="progressbar" aria-label="טוען" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+    <svg class="lyre" viewBox="0 0 108 108" aria-hidden="true">
+      <defs>
+        <linearGradient id="splashGold" x1="0" y1="27" x2="0" y2="83" gradientUnits="userSpaceOnUse">
+          <stop offset="0" stop-color="#fff0c2"/>
+          <stop offset=".45" stop-color="#f0c465"/>
+          <stop offset="1" stop-color="#c28a2f"/>
+        </linearGradient>
+      </defs>
+      <g transform="translate(54 55) scale(1.02) translate(-54 -55)">
+        <g fill="none" stroke="url(#splashGold)" stroke-linecap="round" stroke-linejoin="round">
+          <path class="string" d="M47 38.4V72" stroke-width="1.5"/>
+          <path class="string" d="M54 37.4V72" stroke-width="1.5"/>
+          <path class="string" d="M61 38.4V72" stroke-width="1.5"/>
+          <path d="M44 74C35 68 30.5 58 34 48C36.5 41 35.5 35.5 32 33M64 74C73 68 77.5 58 74 48C71.5 41 72.5 35.5 76 33" stroke-width="4.2"/>
+          <path d="M35.5 40.5Q54 34.5 72.5 40.5" stroke-width="3.6"/>
+        </g>
+        <rect x="39" y="71" width="30" height="9" rx="4.5" fill="url(#splashGold)"/>
+      </g>
+    </svg>
+    <div class="splash-text">
+      <h1>תהילים בדרך</h1>
+      <p>פסוק אחר פסוק, בכל מקום</p>
+      <div class="splash-bar"><div id="splashBar"></div></div>
+      <div id="splashPct" class="splash-pct">0%</div>
+    </div>
+  </div>
   <header>
     <h1>תהילים בדרך</h1>
     <button id="settingsBtn" class="icon-btn" aria-label="הגדרות">⚙</button>
@@ -66,6 +93,12 @@
           <p><b>אייפון:</b> הגדרות ← נגישות ← תוכן מוקרא ← קולות ← עברית.</p>
         </details>
       </section>
+      <label>סוג קול
+        <select id="gender">
+          <option value="female">אישה</option>
+          <option value="male">גבר</option>
+        </select>
+      </label>
       <label>קול
         <select id="voiceSel"></select>
       </label>
@@ -78,6 +111,10 @@
       <p class="hint">0 = הקראה רצופה בלי הפסקה. 1 = הפסקה באורך הפסוק.</p>
       <label class="check"><input id="nikudSpeech" type="checkbox"> לשלוח ניקוד למנוע הדיבור</label>
       <p class="hint">אם ההגייה נשמעת משובשת, נסו לשנות את האפשרות הזו.</p>
+      <div class="native-only">
+        <label class="check"><input id="stressSpeech" type="checkbox"> הטעמה לפי הטעמים (מלעיל/מלרע) — ניסיוני</label>
+        <p class="hint">מילים שהטעם שלהן במלעיל נשלחות למנוע עם תעתיק הגייה. אם הקול מקריא סימנים או מדלג על מילים, כבו את האפשרות.</p>
+      </div>
       <label class="check"><input id="announce" type="checkbox"> להכריז על תחילת כל פרק</label>
       <button id="testVoice" type="button">בדיקת קול</button>
       <div class="native-only version-row">

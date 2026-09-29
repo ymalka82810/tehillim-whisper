@@ -1,4 +1,4 @@
-const CACHE = 'tehillim-v1';
+const CACHE = 'tehillim-v4';
 const FILES = ['./', 'index.html', 'style.css', 'app.js', 'data/tehillim.json', 'manifest.webmanifest', 'icon.svg'];
 
 self.addEventListener('install', e => {

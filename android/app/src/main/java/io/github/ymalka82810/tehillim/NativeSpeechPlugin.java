@@ -150,6 +150,7 @@ public class NativeSpeechPlugin extends Plugin {
         }
         String text = call.getString("text", "");
         float rate = call.getFloat("rate", 1f);
+        float pitch = call.getFloat("pitch", 1f);
         String voiceName = call.getString("voice", "");
 
         boolean voiceSet = false;
@@ -163,6 +164,7 @@ public class NativeSpeechPlugin extends Plugin {
         }
         if (!voiceSet) tts.setLanguage(HEBREW);
         tts.setSpeechRate(rate);
+        tts.setPitch(pitch);
 
         String id = UUID.randomUUID().toString();
         speaking.put(id, call);

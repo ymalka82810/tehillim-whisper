@@ -1,5 +1,27 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 108 108">
-  <rect width="108" height="108" fill="#14161b"/>
-  <circle cx="54" cy="54" r="30" fill="none" stroke="#e0b35a" stroke-width="3"/>
-  <path d="M39 40H69M66 40V70M46 40V68H39" fill="none" stroke="#e0b35a" stroke-width="5.5" stroke-linecap="square" stroke-linejoin="miter"/>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#26356a"/>
+      <stop offset="1" stop-color="#0c1124"/>
+    </linearGradient>
+    <radialGradient id="halo" cx="54" cy="52" r="36" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#4a63b8" stop-opacity=".55"/>
+      <stop offset="1" stop-color="#4a63b8" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="gold" x1="0" y1="27" x2="0" y2="83" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#fff0c2"/>
+      <stop offset=".45" stop-color="#f0c465"/>
+      <stop offset="1" stop-color="#c28a2f"/>
+    </linearGradient>
+  </defs>
+  <rect width="108" height="108" fill="url(#bg)"/>
+  <circle cx="54" cy="52" r="36" fill="url(#halo)"/>
+  <g transform="translate(54 55) scale(1.08) translate(-54 -55)">
+    <g fill="none" stroke="url(#gold)" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M45 38.6V72M48 38.2V72M51 38V72M54 37.9V72M57 38V72M60 38.2V72M63 38.6V72" stroke="#ffe9b0" stroke-width="1.15"/>
+      <path d="M44 74C35 68 30.5 58 34 48C36.5 41 35.5 35.5 32 33M64 74C73 68 77.5 58 74 48C71.5 41 72.5 35.5 76 33" stroke-width="4.2"/>
+      <path d="M35.5 40.5Q54 34.5 72.5 40.5" stroke-width="3.6"/>
+    </g>
+    <rect x="39" y="71" width="30" height="9" rx="4.5" fill="url(#gold)"/>
+  </g>
 </svg>
