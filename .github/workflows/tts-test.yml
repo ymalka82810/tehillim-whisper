@@ -33,7 +33,7 @@ jobs:
         working-directory: android
         run: |
           chmod +x gradlew
-          ./gradlew assembleDebug assembleDebugAndroidTest --no-daemon
+          ./gradlew :app:assembleDebug :app:assembleDebugAndroidTest --no-daemon
 
       - name: Enable KVM
         run: |
