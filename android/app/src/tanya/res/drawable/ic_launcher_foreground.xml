@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- An open book with a flame above it; kept inside the 66dp adaptive-icon safe zone (apps/tanya/icon.svg) -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path android:pathData="M31,55V78.5C39,76 47,76 54,79.5C61,76 69,76 77,78.5V55" android:strokeWidth="2.4" android:strokeLineJoin="round"><aapt:attr name="android:strokeColor"><gradient android:type="linear" android:startX="0" android:startY="25" android:endX="0" android:endY="80"><item android:offset="0" android:color="#FFFFF0C2" /><item android:offset="0.45" android:color="#FFF0C465" /><item android:offset="1" android:color="#FFC28A2F" /></gradient></aapt:attr></path>
+    <path android:pathData="M54,54C47,50.5 39,50.5 33,53V76C39,73.5 47,73.5 54,77ZM54,54C61,50.5 69,50.5 75,53V76C69,73.5 61,73.5 54,77Z"><aapt:attr name="android:fillColor"><gradient android:type="linear" android:startX="0" android:startY="51" android:endX="0" android:endY="77"><item android:offset="0" android:color="#FFFFF6E3" /><item android:offset="1" android:color="#FFE9D09C" /></gradient></aapt:attr></path>
+    <path android:pathData="M37.5,58.5H50M37.5,62.5H50M37.5,66.5H50M41,70.5H50M58,58.5H70.5M58,62.5H70.5M58,66.5H70.5M58,70.5H67" android:strokeWidth="1.6" android:strokeLineCap="round" android:strokeColor="#FFB58A3E" />
+    <path android:pathData="M54,25C59,32 62.5,36.5 62.5,41A8.5,8.5 0 0,1 45.5,41C45.5,36.5 49,32 54,25Z"><aapt:attr name="android:fillColor"><gradient android:type="linear" android:startX="0" android:startY="25" android:endX="0" android:endY="80"><item android:offset="0" android:color="#FFFFF0C2" /><item android:offset="0.45" android:color="#FFF0C465" /><item android:offset="1" android:color="#FFC28A2F" /></gradient></aapt:attr></path>
+    <path android:pathData="M54,33C56.5,37 58,39.5 58,42A4,4 0 0,1 50,42C50,39.5 51.5,37 54,33Z" android:fillColor="#FFFFF6E3" />
+</vector>

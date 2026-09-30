@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The themed (monochrome) icon: the book's outline and lines and the flame (apps/tanya/icon.svg) -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path android:pathData="M31,55V78.5C39,76 47,76 54,79.5C61,76 69,76 77,78.5V55" android:strokeWidth="2.4" android:strokeLineJoin="round" android:strokeColor="#FF000000" />
+    <path android:pathData="M54,54C47,50.5 39,50.5 33,53V76C39,73.5 47,73.5 54,77ZM54,54C61,50.5 69,50.5 75,53V76C69,73.5 61,73.5 54,77Z" android:strokeWidth="1.6" android:strokeLineJoin="round" android:strokeColor="#FF000000" />
+    <path android:pathData="M37.5,58.5H50M37.5,62.5H50M37.5,66.5H50M41,70.5H50M58,58.5H70.5M58,62.5H70.5M58,66.5H70.5M58,70.5H67" android:strokeWidth="1.6" android:strokeLineCap="round" android:strokeColor="#FF000000" />
+    <path android:pathData="M54,25C59,32 62.5,36.5 62.5,41A8.5,8.5 0 0,1 45.5,41C45.5,36.5 49,32 54,25ZM54,33C51.5,37 50,39.5 50,42A4,4 0 0,0 58,42C58,39.5 56.5,37 54,33Z" android:fillColor="#FF000000" />
+</vector>

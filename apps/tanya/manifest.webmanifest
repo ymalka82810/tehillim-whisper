@@ -1,0 +1,16 @@
+{
+  "name": "תניא בדרך",
+  "short_name": "תניא",
+  "description": "הקראת תניא מנוקד משפט אחר משפט, עם תניא יומי",
+  "lang": "he",
+  "dir": "rtl",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#141b36",
+  "theme_color": "#14161b",
+  "icons": [
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}

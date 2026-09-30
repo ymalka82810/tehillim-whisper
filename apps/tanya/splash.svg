@@ -1,0 +1,18 @@
+<svg class="lyre" viewBox="0 0 108 108" aria-hidden="true">
+  <defs>
+    <linearGradient id="splashGold" x1="0" y1="25" x2="0" y2="80" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#fff0c2"/>
+      <stop offset=".45" stop-color="#f0c465"/>
+      <stop offset="1" stop-color="#c28a2f"/>
+    </linearGradient>
+    <linearGradient id="splashParchment" x1="0" y1="51" x2="0" y2="77" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#fff6e3"/>
+      <stop offset="1" stop-color="#e9d09c"/>
+    </linearGradient>
+  </defs>
+  <path d="M31 55V78.5C39 76 47 76 54 79.5C61 76 69 76 77 78.5V55" fill="none" stroke="url(#splashGold)" stroke-width="2.4" stroke-linejoin="round"/>
+  <path d="M54 54C47 50.5 39 50.5 33 53V76C39 73.5 47 73.5 54 77ZM54 54C61 50.5 69 50.5 75 53V76C69 73.5 61 73.5 54 77Z" fill="url(#splashParchment)"/>
+  <path d="M37.5 58.5H50M37.5 62.5H50M37.5 66.5H50M41 70.5H50M58 58.5H70.5M58 62.5H70.5M58 66.5H70.5M58 70.5H67" stroke="#b58a3e" stroke-width="1.6" stroke-linecap="round"/>
+  <path d="M54 25C59 32 62.5 36.5 62.5 41A8.5 8.5 0 0 1 45.5 41C45.5 36.5 49 32 54 25Z" fill="url(#splashGold)"/>
+  <path d="M54 33C56.5 37 58 39.5 58 42A4 4 0 0 1 50 42C50 39.5 51.5 37 54 33Z" fill="#fff6e3"/>
+</svg>
