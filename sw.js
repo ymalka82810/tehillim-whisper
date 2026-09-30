@@ -1,4 +1,4 @@
-const CACHE = 'tehillim-v10';
+const CACHE = 'tehillim-v11';
 const AUDIO_CACHE = 'tehillim-audio'; // recorded chapters, managed by app.js
 const FILES = ['./', 'index.html', 'style.css', 'app.js', 'updater.js', 'data/tehillim.json', 'manifest.webmanifest', 'icon.svg'];
 

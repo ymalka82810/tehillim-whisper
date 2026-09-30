@@ -10,7 +10,8 @@
 
 * { box-sizing: border-box; }
 
-html, body { height: 100%; }
+html { height: 100%; }
+body { min-height: 100%; }
 
 body {
   margin: 0;
@@ -71,6 +72,28 @@ button:active {
 .quick:not(:has(button:not([hidden]))) { display: none; }
 #resumeBtn, #chainBtn { border-color: var(--accent); }
 .today { color: var(--muted); font-size: 0.95rem; }
+/* A daily reading is one tap; the pencil beside it opens a picker (an invisible select over the icon) for another day */
+.daily { display: flex; flex-wrap: wrap; gap: 12px; }
+.daily-item { flex: 1 1 220px; display: flex; gap: 8px; }
+.daily-item > button { flex: 1; min-width: 0; display: grid; gap: 2px; }
+.daily-item small { color: var(--muted); font-size: 0.85rem; }
+.daily-item > button.active { border-color: var(--accent); }
+.daily-item > button.active small { color: var(--accent); }
+.edit {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 48px;
+  flex: none;
+  border-radius: 12px;
+  border: 1px solid #333a46;
+  background: linear-gradient(180deg, #2c313b, #1a1d24);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.09), 0 4px 10px rgb(0 0 0 / 0.45), 0 1px 2px rgb(0 0 0 / 0.5);
+  cursor: pointer;
+}
+.edit svg { width: 20px; height: 20px; fill: var(--muted); }
+.edit:focus-within { outline: 2px solid var(--accent); outline-offset: 3px; }
+.edit select { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; }
 .range { display: flex; gap: 12px; }
 .range[hidden] { display: none; }
 .range label { flex: 1; min-width: 0; display: grid; gap: 4px; color: var(--muted); font-size: 0.9rem; }
@@ -82,7 +105,6 @@ main {
   flex-direction: column;
   justify-content: center;
   padding-block: 16px;
-  min-height: 0;
 }
 
 .segment { color: var(--muted); font-size: 0.95rem; margin-bottom: 4px; }
@@ -94,7 +116,6 @@ main {
   font-size: clamp(1.6rem, 6vw, 2.4rem);
   line-height: 1.7;
   margin: 0;
-  overflow-y: auto;
 }
 
 .status { color: var(--muted); min-height: 1.5em; margin-top: 12px; }
@@ -108,6 +129,10 @@ main {
   align-items: center;
   gap: 20px;
   padding-block: 16px 24px;
+  /* A long verse makes the page scroll; the controls stay in reach at the bottom */
+  position: sticky;
+  bottom: 0;
+  background: var(--bg);
 }
 
 .ctl { width: 76px; height: 76px; border-radius: 50%; padding: 0; display: grid; place-items: center; }

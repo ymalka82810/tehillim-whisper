@@ -694,8 +694,9 @@ function render() {
   $('segment').textContent = `חלק ${seg + 1} מתוך ${plan.length} · ${r.label}`;
   $('fromSel').value = r.start[0];
   $('toSel').value = r.end[0];
-  $('monthSel').value = 'month' in r ? r.month : '';
-  $('weekSel').value = 'week' in r ? r.week : '';
+  if ('month' in r) $('monthSel').value = r.month;
+  if ('week' in r) $('weekSel').value = r.week;
+  syncDaily(r);
   if ('mediaSession' in navigator) {
     navigator.mediaSession.metadata = new MediaMetadata({
       title: `תהילים ${hebNum(c)}:${hebNum(v + 1)}`,
@@ -938,8 +939,20 @@ $('toSel').onchange = () => {
   const from = Math.min(to, Number($('fromSel').value));
   setPlan([chapterSegment(from, to)]);
 };
-$('monthSel').onchange = e => { if (e.target.value !== '') setPlan([monthSegment(Number(e.target.value))]); };
-$('weekSel').onchange = e => { if (e.target.value !== '') setPlan([weekSegment(Number(e.target.value))]); };
+// Each daily button reads the day shown under it: today, unless another was picked with its pencil
+const readMonth = () => setPlan([monthSegment(Number($('monthSel').value))]);
+const readWeek = () => setPlan([weekSegment(Number($('weekSel').value))]);
+$('monthBtn').onclick = readMonth;
+$('weekBtn').onclick = readWeek;
+$('monthSel').onchange = readMonth;
+$('weekSel').onchange = readWeek;
+function syncDaily(r = pos && plan[seg]) {
+  const shown = sel => sel.selectedOptions[0]?.text ?? '';
+  $('monthDay').textContent = shown($('monthSel'));
+  $('weekDay').textContent = shown($('weekSel'));
+  $('monthBtn').classList.toggle('active', !!r && plan.length === 1 && 'month' in r);
+  $('weekBtn').classList.toggle('active', !!r && plan.length === 1 && 'week' in r);
+}
 $('chainBtn').onclick = () => setPlan(chainPlan(), chainStatus());
 
 // The date line and the "(היום)" marks follow the calendar while the app stays open
@@ -954,14 +967,15 @@ function refreshToday() {
   const month = $('monthSel'), week = $('weekSel');
   month.innerHTML = '';
   week.innerHTML = '';
-  month.add(new Option('בחרו יום', ''));
-  week.add(new Option('בחרו יום', ''));
   for (let d = 1; d <= 30; d++) {
     month.add(new Option(`${hebNum(d)} בחודש${mark(d, today)}`, d));
     if (d === 29) month.add(new Option(`כ״ט בחודש חסר${mark(0, today)}`, 0));
   }
   WEEKDAYS.forEach((name, d) => week.add(new Option(`יום ${name}${mark(d, weekday)}`, d)));
+  month.value = today;
+  week.value = weekday;
   if (pos) render();
+  else syncDaily();
 }
 refreshToday();
 setInterval(refreshToday, 60000);

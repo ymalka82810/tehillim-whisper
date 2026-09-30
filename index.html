@@ -66,9 +66,21 @@
       <button id="chainBtn" hidden>הרצף שלי</button>
       <button id="resumeBtn" hidden>המשך מהמקום שעצרת</button>
     </div>
-    <div class="range">
-      <label>לפי יום בחודש <select id="monthSel"></select></label>
-      <label>לפי יום בשבוע <select id="weekSel"></select></label>
+    <div class="daily">
+      <div class="daily-item">
+        <button id="monthBtn" type="button">יומי לפי החודש <small id="monthDay"></small></button>
+        <label class="edit" title="בחירת יום אחר">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 17.2V20h2.8l8.3-8.3-2.8-2.8L4 17.2zm15.7-8.9a1 1 0 0 0 0-1.4l-2.6-2.6a1 1 0 0 0-1.4 0l-2 2 4 4 2-2z"/></svg>
+          <select id="monthSel" aria-label="בחירת יום בחודש"></select>
+        </label>
+      </div>
+      <div class="daily-item">
+        <button id="weekBtn" type="button">יומי לפי השבוע <small id="weekDay"></small></button>
+        <label class="edit" title="בחירת יום אחר">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 17.2V20h2.8l8.3-8.3-2.8-2.8L4 17.2zm15.7-8.9a1 1 0 0 0 0-1.4l-2.6-2.6a1 1 0 0 0-1.4 0l-2 2 4 4 2-2z"/></svg>
+          <select id="weekSel" aria-label="בחירת יום בשבוע"></select>
+        </label>
+      </div>
     </div>
     <div class="range">
       <label>מפרק <select id="fromSel"></select></label>
