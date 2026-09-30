@@ -1,7 +1,7 @@
 // Copies the static web app into www/ for Capacitor (the repo root is also served as-is by GitHub Pages)
 import { cp, rm, mkdir, readFile, writeFile } from 'node:fs/promises';
 
-const FILES = ['index.html', 'style.css', 'app.js', 'manifest.webmanifest', 'icon.svg', 'sw.js', 'data'];
+const FILES = ['index.html', 'style.css', 'app.js', 'updater.js', 'manifest.webmanifest', 'icon.svg', 'sw.js', 'data'];
 // Recorded chapters shipped inside the APK, so reading can start before anything downloads:
 // the first chapter of each weekday's reading and of each of the five books. The rest download in the background.
 const BUNDLED = [1, 30, 42, 51, 73, 90, 107, 120];

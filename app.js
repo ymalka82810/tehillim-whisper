@@ -1,3 +1,5 @@
+import { appInfo, findUpdate, installUpdate } from './updater.js';
+
 const $ = id => document.getElementById(id);
 const store = {
   get(key, fallback) {
@@ -1024,19 +1026,20 @@ if (native && !recordedVoice() && voiceProblem()) $('settings').showModal();
 downloadInBackground();
 
 // ---------- App updates (APK only) ----------
-const RELEASES_API = 'https://api.github.com/repos/ymalka82810/tehillim-whisper/releases/latest';
+// The APK downloads inside the app and the system install dialog opens, so updating is one tap
+const UPDATE_ERRORS = {
+  permission: 'כדי לעדכן, יש לאשר לאפליקציה להתקין עדכונים',
+  'not an update': 'הקובץ שהורד אינו גרסה חדשה של האפליקציה',
+  'no installer': 'לא נמצא במכשיר רכיב התקנה',
+};
 async function checkForUpdate(manual = false) {
-  const { versionCode, versionName } = await native.appInfo();
+  const { versionName } = await appInfo();
   $('versionText').textContent = `גרסה ${versionName}`;
   try {
-    const res = await fetch(RELEASES_API, { cache: 'no-store' });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const release = await res.json();
-    const latest = Number(release.tag_name.match(/(\d+)$/)?.[1] || 0);
-    const apk = release.assets.find(a => a.name.endsWith('.apk'));
-    if (latest > versionCode && apk) {
-      $('updateText').textContent = `גרסה חדשה זמינה (${release.tag_name.replace(/^v/, '')})`;
-      $('updateBtn').onclick = () => native.openUrl({ url: apk.browser_download_url });
+    const update = await findUpdate('ymalka82810/tehillim-whisper');
+    if (update) {
+      $('updateText').textContent = `גרסה חדשה זמינה (${update.version})`;
+      $('updateBtn').onclick = () => startUpdate(update);
       $('updateBanner').hidden = false;
       if (manual) $('settings').close();
     } else if (manual) {
@@ -1045,6 +1048,20 @@ async function checkForUpdate(manual = false) {
   } catch {
     if (manual) $('versionText').textContent = `גרסה ${versionName} · אין חיבור לבדיקת עדכונים`;
   }
+}
+async function startUpdate(update) {
+  const btn = $('updateBtn');
+  btn.disabled = true;
+  $('updateText').textContent = 'מוריד את העדכון…';
+  try {
+    await installUpdate(update.url, percent => {
+      if (percent >= 0) $('updateText').textContent = `מוריד את העדכון… ${percent}%`;
+    });
+    $('updateText').textContent = `גרסה חדשה זמינה (${update.version})`;
+  } catch (e) {
+    $('updateText').textContent = UPDATE_ERRORS[e.message] || 'ההורדה נכשלה, נסו שוב';
+  }
+  btn.disabled = false;
 }
 if (native) {
   $('checkUpdateBtn').onclick = () => checkForUpdate(true);
