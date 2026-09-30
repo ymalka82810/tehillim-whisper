@@ -68,6 +68,7 @@ button:active {
 .picker { display: grid; gap: 10px; }
 .quick { display: flex; flex-wrap: wrap; gap: 8px; }
 .quick button { flex: 1 1 140px; }
+.quick:not(:has(button:not([hidden]))) { display: none; }
 #resumeBtn, #chainBtn { border-color: var(--accent); }
 .today { color: var(--muted); font-size: 0.95rem; }
 .range { display: flex; gap: 12px; }

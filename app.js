@@ -940,8 +940,6 @@ $('toSel').onchange = () => {
 };
 $('monthSel').onchange = e => { if (e.target.value !== '') setPlan([monthSegment(Number(e.target.value))]); };
 $('weekSel').onchange = e => { if (e.target.value !== '') setPlan([weekSegment(Number(e.target.value))]); };
-$('todayMonthBtn').onclick = () => setPlan([todayMonth()]);
-$('todayWeekBtn').onclick = () => setPlan([todayWeek()]);
 $('chainBtn').onclick = () => setPlan(chainPlan(), chainStatus());
 
 // The date line and the "(היום)" marks follow the calendar while the app stays open
