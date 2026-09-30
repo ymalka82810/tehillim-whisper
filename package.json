@@ -4,7 +4,9 @@
   "type": "module",
   "scripts": {
     "build:www": "node scripts/build-www.mjs",
-    "sync": "npm run build:www && cap sync android"
+    "sync": "npm run build:www && cap sync android",
+    "sync:chumash": "node scripts/build-www.mjs chumash && cap sync android",
+    "sync:tanya": "node scripts/build-www.mjs tanya && cap sync android"
   },
   "dependencies": {
     "@capacitor/android": "^8.5.2",

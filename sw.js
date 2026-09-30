@@ -1,6 +1,7 @@
-const CACHE = 'tehillim-v11';
+const CACHE = 'tehillim-v12';
 const AUDIO_CACHE = 'tehillim-audio'; // recorded chapters, managed by app.js
-const FILES = ['./', 'index.html', 'style.css', 'app.js', 'updater.js', 'data/tehillim.json', 'manifest.webmanifest', 'icon.svg'];
+const FILES = ['./', 'index.html', 'style.css', 'app.js', 'updater.js', 'hebrew.js', 'app-config.js', 'apps/tehillim/config.js',
+  'data/tehillim.json', 'manifest.webmanifest', 'icon.svg'];
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(FILES)).then(() => self.skipWaiting()));

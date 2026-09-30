@@ -66,22 +66,7 @@
       <button id="chainBtn" hidden>הרצף שלי</button>
       <button id="resumeBtn" hidden>המשך מהמקום שעצרת</button>
     </div>
-    <div class="daily">
-      <div class="daily-item">
-        <button id="monthBtn" type="button">יומי לפי החודש <small id="monthDay"></small></button>
-        <label class="edit" title="בחירת יום אחר">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 17.2V20h2.8l8.3-8.3-2.8-2.8L4 17.2zm15.7-8.9a1 1 0 0 0 0-1.4l-2.6-2.6a1 1 0 0 0-1.4 0l-2 2 4 4 2-2z"/></svg>
-          <select id="monthSel" aria-label="בחירת יום בחודש"></select>
-        </label>
-      </div>
-      <div class="daily-item">
-        <button id="weekBtn" type="button">יומי לפי השבוע <small id="weekDay"></small></button>
-        <label class="edit" title="בחירת יום אחר">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 17.2V20h2.8l8.3-8.3-2.8-2.8L4 17.2zm15.7-8.9a1 1 0 0 0 0-1.4l-2.6-2.6a1 1 0 0 0-1.4 0l-2 2 4 4 2-2z"/></svg>
-          <select id="weekSel" aria-label="בחירת יום בשבוע"></select>
-        </label>
-      </div>
-    </div>
+    <div id="daily" class="daily"></div>
     <div class="range">
       <label>מפרק <select id="fromSel"></select></label>
       <label>עד פרק <select id="toSel"></select></label>
@@ -117,7 +102,7 @@
       <section id="voiceFiles" class="chain voice-files" hidden>
         <h3>קבצי קול</h3>
         <p class="hint">הקולות המוקלטים נשמרים בטלפון כדי שיעבדו גם בלי אינטרנט. אפשר למחוק קול כדי לפנות מקום; הוא לא יורד שוב עד שתפעילו את ההורדה.</p>
-        <p class="hint native-only">כמה פרקים (א, ל, מב, נא, עג, צ, קז, קכ) ארוזים בתוך האפליקציה ולא נמחקים, כך שאפשר להקריא אותם גם בלי אינטרנט.</p>
+        <p id="bundledNote" class="hint native-only"></p>
         <ul id="voiceFilesList"></ul>
       </section>
       <div id="deviceVoice">
@@ -161,13 +146,11 @@
       <label class="check"><input id="announce" type="checkbox"> להכריז על תחילת כל פרק</label>
       <section class="chain">
         <h3>הרצף שלי</h3>
-        <p class="hint">חלקים שיוקראו ברצף אחד אחרי השני, בכפתור "הרצף שלי". האפליקציה נפתחת על הרצף. תהילים יומי מתעדכן לפי התאריך של אותו יום.</p>
+        <p class="hint">חלקים שיוקראו ברצף אחד אחרי השני, בכפתור "הרצף שלי". האפליקציה נפתחת על הרצף. קריאה יומית מתעדכנת לפי התאריך של אותו יום.</p>
         <ol id="chainList"></ol>
         <p id="chainEmpty" class="hint">עדיין לא נוספו חלקים.</p>
         <label>להוסיף לרצף
           <select id="chainType">
-            <option value="month">תהילים יומי לפי החודש</option>
-            <option value="week">תהילים יומי לפי השבוע</option>
             <option value="chapters">פרק או פרקים</option>
           </select>
         </label>
@@ -185,7 +168,7 @@
           <p><b>"פסוק הבא"</b> — מעבר לפסוק הבא.</p>
           <p><b>"פסוק קודם"</b> — חזרה לפסוק הקודם.</p>
           <p><b>"עבור לפרק כג"</b> — מעבר לפרק. אפשר לומר גם "חזור לפרק" או "החלף לפרק".</p>
-          <p>את מספר הפרק אפשר לומר באותיות ("קכא"), בשמות האותיות ("קוף כף אלף") או במספר ("מאה עשרים ואחת"). אפשר מפרק א עד פרק קנ.</p>
+          <p>את מספר הפרק אפשר לומר באותיות ("קכא"), בשמות האותיות ("קוף כף אלף") או במספר ("מאה עשרים ואחת"). <span id="commandRange"></span></p>
           <p>זיהוי הדיבור דורש אישור גישה למיקרופון, ובדרך כלל גם חיבור לאינטרנט.</p>
         </details>
       </section>
@@ -195,7 +178,7 @@
         <button id="checkUpdateBtn" type="button">בדיקת עדכונים</button>
       </div>
       <button value="close" class="primary">סגור</button>
-      <p class="credit">טקסט: <a href="https://he.wikisource.org/wiki/מקרא_על_פי_המסורה" target="_blank" rel="noopener">מקרא על פי המסורה</a> (CC-BY-SA) דרך Sefaria</p>
+      <p id="textCredit" class="credit"></p>
       <p class="credit">הקולות עומר וליאת: <a href="https://github.com/thewh1teagle/pocket-tts-onnx" target="_blank" rel="noopener">Pocket TTS</a> של Kyutai עם מתאם עברי (CC BY 4.0), הגייה והטעמה: <a href="https://github.com/phonikud/phonikud" target="_blank" rel="noopener">Phonikud</a></p>
     </form>
   </dialog>

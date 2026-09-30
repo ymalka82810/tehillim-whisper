@@ -11,6 +11,14 @@ permissions:
 jobs:
   apk:
     runs-on: ubuntu-24.04
+    strategy:
+      matrix:
+        # One APK per app (apps/<app>/config.js). Chumash and Tanya join once they have their data.
+        include:
+          - app: tehillim
+            name: תהילים בדרך
+            tag: v # Tehillim APKs from before the split look only at the latest release, so Tehillim stays "latest"
+            latest: true
     steps:
       - uses: actions/checkout@v5
 
@@ -25,7 +33,7 @@ jobs:
           java-version: 21
 
       - run: npm ci
-      - run: npm run sync
+      - run: node scripts/build-www.mjs ${{ matrix.app }} && npx cap sync android
 
       - name: Decode signing key
         run: echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > "$RUNNER_TEMP/release.keystore"
@@ -35,21 +43,22 @@ jobs:
         env:
           ANDROID_KEYSTORE_FILE: ${{ runner.temp }}/release.keystore
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          FLAVOR: ${{ matrix.app }}
         run: |
           chmod +x gradlew
-          ./gradlew assembleRelease --no-daemon
-          cp app/build/outputs/apk/release/app-release.apk "$RUNNER_TEMP/tehillim.apk"
+          ./gradlew "assemble${FLAVOR^}Release" --no-daemon
+          cp "app/build/outputs/apk/$FLAVOR/release/app-$FLAVOR-release.apk" "$RUNNER_TEMP/$FLAVOR.apk"
 
       - uses: actions/upload-artifact@v6
         with:
-          name: tehillim-apk
-          path: ${{ runner.temp }}/tehillim.apk
+          name: ${{ matrix.app }}-apk
+          path: ${{ runner.temp }}/${{ matrix.app }}.apk
 
       - name: Publish release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "v1.0.${{ github.run_number }}" "$RUNNER_TEMP/tehillim.apk" \
-            --title "תהילים בדרך 1.0.${{ github.run_number }}" \
-            --notes "להתקנה: הורידו את tehillim.apk בטלפון ופתחו אותו." \
-            --latest
+          gh release create "${{ matrix.tag }}1.0.${{ github.run_number }}" "$RUNNER_TEMP/${{ matrix.app }}.apk" \
+            --title "${{ matrix.name }} 1.0.${{ github.run_number }}" \
+            --notes "להתקנה: הורידו את ${{ matrix.app }}.apk בטלפון ופתחו אותו." \
+            --latest=${{ matrix.latest }}

@@ -1,4 +1,6 @@
 import { appInfo, findUpdate, installUpdate } from './updater.js';
+import { hebNum, WEEKDAYS, hebrewDate } from './hebrew.js';
+import { meta, content } from './app-config.js';
 
 const $ = id => document.getElementById(id);
 const store = {
@@ -38,7 +40,7 @@ const splash = (() => {
 
 async function fetchWithProgress(url, onProgress) {
   const res = await fetch(url);
-  const total = Number(res.headers.get('content-length')) || 330000; // no header → the data file's approximate size
+  const total = Number(res.headers.get('content-length')) || meta.dataSize; // no header → the data file's approximate size
   if (!res.body) return res.json();
   const reader = res.body.getReader();
   const parts = [];
@@ -53,7 +55,9 @@ async function fetchWithProgress(url, onProgress) {
   return JSON.parse(await new Blob(parts).text());
 }
 
-const chapters = await fetchWithProgress('data/tehillim.json', f => splash.set(f * 70));
+const chapters = await fetchWithProgress(meta.data, f => splash.set(f * 70));
+const book = content(chapters);
+const UNITS = chapters.length;
 splash.set(75);
 
 // In the Android app, the WebView has no speechSynthesis, so speech goes through the native plugin.
@@ -63,69 +67,11 @@ const native = window.Capacitor?.isNativePlatform?.()
   : null;
 document.body.classList.add(native ? 'is-native' : 'is-web');
 
-// ---------- Hebrew numerals ----------
-const ONES = ['', 'א', 'ב', 'ג', 'ד', 'ה', 'ו', 'ז', 'ח', 'ט'];
-const TENS = ['', 'י', 'כ', 'ל', 'מ', 'נ', 'ס', 'ע', 'פ', 'צ'];
-const HUNDREDS = ['', 'ק', 'ר', 'ש', 'ת', 'תק', 'תר', 'תש', 'תת', 'תתק'];
-function hebNum(n) {
-  let s = HUNDREDS[Math.floor(n / 100)];
-  n %= 100;
-  if (n === 15) s += 'טו';
-  else if (n === 16) s += 'טז';
-  else s += TENS[Math.floor(n / 10)] + ONES[n % 10];
-  return s.length > 1 ? s.slice(0, -1) + '״' + s.slice(-1) : s + '׳';
-}
-
-// ---------- Daily divisions ----------
-// [fromChapter, fromVerse(1-based), toChapter, toVerse]
-const MONTH = [
-  [1, 1, 9], [10, 1, 17], [18, 1, 22], [23, 1, 28], [29, 1, 34], [35, 1, 38], [39, 1, 43], [44, 1, 48],
-  [49, 1, 54], [55, 1, 59], [60, 1, 65], [66, 1, 68], [69, 1, 71], [72, 1, 76], [77, 1, 78], [79, 1, 82],
-  [83, 1, 87], [88, 1, 89], [90, 1, 96], [97, 1, 103], [104, 1, 105], [106, 1, 107], [108, 1, 112],
-  [113, 1, 118], [119, 1, 119, 96], [119, 97, 119], [120, 1, 134], [135, 1, 139], [140, 1, 144], [145, 1, 150],
-];
-const WEEK = [[1, 29], [30, 50], [51, 72], [73, 89], [90, 106], [107, 119], [120, 150]];
-const WEEKDAYS = ['ראשון', 'שני', 'שלישי', 'רביעי', 'חמישי', 'שישי', 'שבת'];
-
-function makeRange(fromCh, toCh, fromV = 1, toV = chapters[toCh - 1].length) {
-  return { start: [fromCh, fromV - 1], end: [toCh, toV - 1] };
-}
-
-const chaptersLabel = (a, b) => a === b ? `פרק ${hebNum(a)}` : `פרקים ${hebNum(a)}–${hebNum(b)}`;
-
-// A segment is a range to read with its name; a reading plan is segments read one after another
-function chapterSegment(from, to = from) {
-  return { ...makeRange(from, to), label: chaptersLabel(from, to) };
-}
-
-// day: 1–30, or 0 for the 29th of a short month, which also reads the 30th's chapters
-function monthSegment(day) {
-  if (!day) return { ...makeRange(140, 150), month: 0, label: 'יום כ״ט (חודש חסר) · פרקים קמ–קנ' };
-  const [a, av, b, bv] = MONTH[day - 1];
-  const label = a === b ? `פרק ${hebNum(a)} פסוקים ${hebNum(av)}–${hebNum(bv ?? chapters[b - 1].length)}` : chaptersLabel(a, b);
-  return { ...makeRange(a, b, av, bv), month: day, label: `יום ${hebNum(day)} בחודש · ${label}` };
-}
-
-function weekSegment(d) {
-  const [a, b] = WEEK[d];
-  return { ...makeRange(a, b), week: d, label: `יום ${WEEKDAYS[d]} · ${chaptersLabel(a, b)}` };
-}
-
-// The Hebrew date of the civil day (the app doesn't know when night falls)
-function hebrewDate(date) {
-  const parts = new Intl.DateTimeFormat('en-u-ca-hebrew', { day: 'numeric', year: 'numeric' }).formatToParts(date);
-  const part = type => Number(parts.find(p => p.type === type).value);
-  return { day: part('day'), year: part('year'), month: new Intl.DateTimeFormat('he-u-ca-hebrew', { month: 'long' }).format(date) };
-}
-const hebrewDay = date => hebrewDate(date).day;
-
-function todayMonth() {
-  const now = new Date();
-  const day = hebrewDay(now);
-  const shortMonthEnd = day === 29 && hebrewDay(new Date(now.getTime() + 86400000)) === 1;
-  return monthSegment(shortMonthEnd ? 0 : day);
-}
-const todayWeek = () => weekSegment(new Date().getDay());
+// ---------- Daily readings ----------
+// A segment is a range to read with its name ({ start, end, label }); a reading plan is segments read one after another.
+// The daily readings come from the app's config; a daily segment also carries which reading and day it is.
+const dailySegment = (d, value) => ({ ...d.segment(value), daily: d.id, value });
+const todaySegment = d => dailySegment(d, d.today());
 
 function todayText() {
   const now = new Date();
@@ -218,7 +164,7 @@ const settings = {
   nikudSpeech: store.get('nikudSpeech', true),
   stressSpeech: store.get('stressSpeech', false),
   announce: store.get('announce', true),
-  chain: store.get('chain', []), // the reader's own sequence: [{ type: 'month' | 'week' } | { type: 'chapters', from, to }]
+  chain: store.get('chain', []), // the reader's own sequence: [{ type: <daily id> } | { type: 'chapters', from, to }]
   noDownload: store.get('noDownload', []), // recorded voices the reader deleted: not kept offline until turned back on
 };
 
@@ -312,7 +258,7 @@ function bindSettings() {
     }
   };
   $('settingsBtn').onclick = () => $('settings').showModal();
-  $('testVoice').onclick = () => { cancelSpeech(); say(23, 1); };
+  $('testVoice').onclick = () => { cancelSpeech(); say(...meta.testVerse); };
   $('voiceKind').onchange = e => {
     save('voice', e.target.value);
     showVoiceKind();
@@ -326,10 +272,11 @@ function bindSettings() {
 }
 
 // ---------- My sequence ----------
-const CHAIN_TYPES = { month: 'תהילים יומי לפי החודש', week: 'תהילים יומי לפי השבוע' };
-const chainItemLabel = item => CHAIN_TYPES[item.type] || chaptersLabel(item.from, item.to);
-const chainPlan = () => settings.chain.map(item =>
-  item.type === 'month' ? todayMonth() : item.type === 'week' ? todayWeek() : chapterSegment(item.from, item.to));
+const dailyOf = item => book.dailies.find(d => d.id === item.type);
+const chainItemLabel = item => dailyOf(item)?.chain || book.units(item.from, item.to);
+// A daily reading the app no longer has is left out
+const chainPlan = () => settings.chain.flatMap(item =>
+  item.type === 'chapters' ? [book.unitSegment(item.from, item.to)] : dailyOf(item) ? [todaySegment(dailyOf(item))] : []);
 const chainStatus = () => `הרצף שלי · ${settings.chain.length} חלקים`;
 
 function saveChain(chain) {
@@ -373,6 +320,8 @@ function renderChain() {
 
 function bindChain() {
   const type = $('chainType'), from = $('chainFrom'), to = $('chainTo');
+  for (const d of book.dailies) type.add(new Option(d.chain, d.id), type.options[type.options.length - 1]);
+  type.value = type.options[0].value;
   const showType = () => { $('chainChapters').hidden = type.value !== 'chapters'; };
   type.onchange = showType;
   from.onchange = () => { to.value = from.value; };
@@ -387,10 +336,10 @@ function bindChain() {
 
 // ---------- Recorded voices ----------
 // Every verse is pre-rendered (scripts/audio/render.py) with its stress taken from the te'amim.
-// A chapter is one file, its clips back to back (clip 0 announces the chapter); audio/index.json has their lengths.
+// A chapter is one file, its clips back to back (clip 0 announces the chapter); <audio>/index.json has their lengths.
 // The APK ships a few chapters (index.bundled); the rest download in the background and stay in the Cache API.
-const AUDIO_REMOTE = native ? 'https://ymalka82810.github.io/tehillim-whisper/audio/' : 'audio/';
-const AUDIO_CACHE = 'tehillim-audio';
+const AUDIO_REMOTE = native ? `https://ymalka82810.github.io/tehillim-whisper/${meta.audio}` : meta.audio;
+const AUDIO_CACHE = meta.audioCache;
 const RECORDED = { liat: 'ליאת (אישה)', omer: 'עומר (גבר)' };
 const canPlayOpus = !!new Audio().canPlayType('audio/ogg; codecs=opus');
 const audio = { index: null, shipped: null, stored: {}, memo: new Map(), inflight: new Map(), downloading: false };
@@ -405,7 +354,7 @@ async function cachedJson(cache, url) {
 async function loadAudioIndex() {
   if (!canPlayOpus || !('caches' in window)) return;
   const cache = await caches.open(AUDIO_CACHE);
-  if (native) audio.shipped = await fetch('audio/index.json').then(r => r.json()).catch(() => null);
+  if (native) audio.shipped = await fetch(`${meta.audio}index.json`).then(r => r.json()).catch(() => null);
   const url = `${AUDIO_REMOTE}index.json`;
   try {
     const res = await fetch(url, { cache: 'no-store', signal: AbortSignal.timeout(4000) }); // don't hold up the splash
@@ -461,7 +410,7 @@ async function chapterClips(voice, c) {
   let clips = null;
   try {
     if (isShipped(voice, c)) {
-      clips = slice(await (await fetch(`audio/${voice}/${pad3(c)}.bin`)).blob(), audio.shipped.voices[voice].chapters[c]);
+      clips = slice(await (await fetch(`${meta.audio}${voice}/${pad3(c)}.bin`)).blob(), audio.shipped.voices[voice].chapters[c]);
     } else if (audio.index.voices[voice]?.chapters[c]) {
       const url = `${AUDIO_REMOTE}${voice}/${pad3(c)}.bin?v=${audio.index.version}`;
       const hit = await (await caches.open(AUDIO_CACHE)).match(url);
@@ -488,9 +437,9 @@ function prioritize(p) {
 // The chosen plan from where the reader is, then earlier picks, the reader's sequence, today's readings, and the rest in order
 function downloadOrder() {
   const first = pos ? [...chaptersOf({ start: pos, end: plan[seg].end }), ...plan.slice(seg + 1).flatMap(chaptersOf)] : [];
-  first.push(...picked, ...chainPlan().flatMap(chaptersOf), ...chaptersOf(todayMonth()), ...chaptersOf(todayWeek()));
-  if (pos) first.push(...Array.from({ length: 150 - pos[0] + 1 }, (_, i) => pos[0] + i));
-  return [...new Set([...first, ...Array.from({ length: 150 }, (_, i) => i + 1)])];
+  first.push(...picked, ...chainPlan().flatMap(chaptersOf), ...book.dailies.flatMap(d => chaptersOf(todaySegment(d))));
+  if (pos) first.push(...Array.from({ length: UNITS - pos[0] + 1 }, (_, i) => pos[0] + i));
+  return [...new Set([...first, ...Array.from({ length: UNITS }, (_, i) => i + 1)])];
 }
 
 async function downloadInBackground() {
@@ -597,14 +546,7 @@ async function say(c, i) {
   const voice = recordedVoice();
   const clips = voice && await chapterClips(voice, c);
   if (clips?.[i]) return playClip(clips[i]);
-  return speak(i ? speakable(chapters[c - 1][i - 1], settings.nikudSpeech) : `פרק ${chapterName(c)}`);
-}
-
-// The chapter as it is called, by the names of its letters: 119 -> "קוף יוד טית"
-const LETTER_NAMES = { א: 'אָלֶף', ב: 'בֵּית', ג: 'גִּימֶל', ד: 'דָּלֶת', ה: 'הֵא', ו: 'וָו', ז: 'זַיִן', ח: 'חֵית', ט: 'טֵית',
-  י: 'יוּד', כ: 'כָּף', ל: 'לָמֶד', מ: 'מֵם', נ: 'נוּן', ס: 'סָמֶךְ', ע: 'עַיִן', פ: 'פֵּא', צ: 'צָדִי', ק: 'קוּף' };
-function chapterName(c) {
-  return [...hebNum(c).replace(/[׳״]/g, '')].map(l => LETTER_NAMES[l]).join(' ');
+  return speak(i ? speakable(chapters[c - 1][i - 1], settings.nikudSpeech) : book.announcement(c));
 }
 
 let liveUtterance = null; // keep a reference: Chrome drops events of garbage-collected utterances
@@ -660,7 +602,7 @@ function step(p, dir) {
   v += dir;
   if (v >= chapters[c - 1].length) { c++; v = 0; }
   if (v < 0) { c--; if (c < 1) return null; v = chapters[c - 1].length - 1; }
-  if (c > 150) return null;
+  if (c > UNITS) return null;
   return [c, v];
 }
 // The next verse in the plan: through the segment, then on to the next one
@@ -683,7 +625,7 @@ function setStatus(text) { $('status').textContent = text; }
 function render() {
   if (!pos) return;
   const [c, v] = pos;
-  $('where').textContent = `פרק ${hebNum(c)} · פסוק ${hebNum(v + 1)}`;
+  $('where').textContent = book.where(c, v);
   $('verse').textContent = chapters[c - 1][v].replaceAll(STRESS, '');
   const r = plan[seg];
   const sizes = plan.map(s => flatIndex(s.end) - flatIndex(s.start) + 1);
@@ -694,13 +636,12 @@ function render() {
   $('segment').textContent = `חלק ${seg + 1} מתוך ${plan.length} · ${r.label}`;
   $('fromSel').value = r.start[0];
   $('toSel').value = r.end[0];
-  if ('month' in r) $('monthSel').value = r.month;
-  if ('week' in r) $('weekSel').value = r.week;
+  if (r.daily && $(`${r.daily}Sel`)) $(`${r.daily}Sel`).value = r.value;
   syncDaily(r);
   if ('mediaSession' in navigator) {
     navigator.mediaSession.metadata = new MediaMetadata({
-      title: `תהילים ${hebNum(c)}:${hebNum(v + 1)}`,
-      artist: 'תהילים בדרך',
+      title: book.mediaTitle(c, v),
+      artist: meta.name,
       artwork: [{ src: 'icon.svg', sizes: 'any', type: 'image/svg+xml' }],
     });
   }
@@ -850,7 +791,7 @@ function spokenChapter(s) {
   // Hebrew cardinals are a plain sum: מאה עשרים ואחת = 100 + 20 + 1, חמש עשרה = 5 + 10
   const values = words.map(w => NUMBER_WORDS[w] ?? NUMBER_WORDS[w.replace(/^ו/, '')]);
   if (!n && values.every(Boolean)) n = values.reduce((a, b) => a + b, 0);
-  return n >= 1 && n <= 150 ? n : null;
+  return n >= 1 && n <= UNITS ? n : null;
 }
 
 function parseCommand(heard) {
@@ -875,9 +816,9 @@ function goToChapter(c) {
     pos = c === plan[at].start[0] ? [...plan[at].start] : [c, 0];
     render();
   } else {
-    setPlan([chapterSegment(c)]);
+    setPlan([book.unitSegment(c)]);
   }
-  setStatus(`פרק ${hebNum(c)}`);
+  setStatus(book.unit(c));
 }
 
 const WebRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -925,33 +866,41 @@ async function listenForCommand() {
 }
 
 // ---------- Wiring ----------
+$('bundledNote').textContent = `כמה פרקים (${meta.bundled.map(c => book.unit(c).replace(/^פרק /, '').replace(/[׳״]/g, '')).join(', ')}) ארוזים בתוך האפליקציה ולא נמחקים, כך שאפשר להקריא אותם גם בלי אינטרנט.`;
+$('commandRange').textContent = `אפשר מ${book.unit(1)} עד ${book.unit(UNITS)}.`;
+$('textCredit').innerHTML = meta.credit;
 for (const id of ['fromSel', 'toSel', 'chainFrom', 'chainTo']) {
   const sel = $(id);
-  for (let c = 1; c <= 150; c++) sel.add(new Option(`${hebNum(c)} (${c})`, c));
+  for (let c = 1; c <= UNITS; c++) sel.add(new Option(book.unitOption(c), c));
 }
 $('fromSel').onchange = () => {
   const from = Number($('fromSel').value);
   const to = Math.max(from, Number($('toSel').value));
-  setPlan([chapterSegment(from, to)]);
+  setPlan([book.unitSegment(from, to)]);
 };
 $('toSel').onchange = () => {
   const to = Number($('toSel').value);
   const from = Math.min(to, Number($('fromSel').value));
-  setPlan([chapterSegment(from, to)]);
+  setPlan([book.unitSegment(from, to)]);
 };
+
 // Each daily button reads the day shown under it: today, unless another was picked with its pencil
-const readMonth = () => setPlan([monthSegment(Number($('monthSel').value))]);
-const readWeek = () => setPlan([weekSegment(Number($('weekSel').value))]);
-$('monthBtn').onclick = readMonth;
-$('weekBtn').onclick = readWeek;
-$('monthSel').onchange = readMonth;
-$('weekSel').onchange = readWeek;
+const PENCIL = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 17.2V20h2.8l8.3-8.3-2.8-2.8L4 17.2zm15.7-8.9a1 1 0 0 0 0-1.4l-2.6-2.6a1 1 0 0 0-1.4 0l-2 2 4 4 2-2z"/></svg>';
+for (const d of book.dailies) {
+  const item = document.createElement('div');
+  item.className = 'daily-item';
+  item.innerHTML = `<button id="${d.id}Btn" type="button"></button><label class="edit" title="בחירת יום אחר">${PENCIL}<select id="${d.id}Sel"></select></label>`;
+  $('daily').append(item);
+  const btn = $(`${d.id}Btn`), sel = $(`${d.id}Sel`);
+  btn.append(`${d.button} `, Object.assign(document.createElement('small'), { id: `${d.id}Day` }));
+  sel.setAttribute('aria-label', d.pick);
+  btn.onclick = sel.onchange = () => setPlan([dailySegment(d, Number(sel.value))]);
+}
 function syncDaily(r = pos && plan[seg]) {
-  const shown = sel => sel.selectedOptions[0]?.text ?? '';
-  $('monthDay').textContent = shown($('monthSel'));
-  $('weekDay').textContent = shown($('weekSel'));
-  $('monthBtn').classList.toggle('active', !!r && plan.length === 1 && 'month' in r);
-  $('weekBtn').classList.toggle('active', !!r && plan.length === 1 && 'week' in r);
+  for (const d of book.dailies) {
+    $(`${d.id}Day`).textContent = $(`${d.id}Sel`).selectedOptions[0]?.text ?? '';
+    $(`${d.id}Btn`).classList.toggle('active', !!r && plan.length === 1 && r.daily === d.id);
+  }
 }
 $('chainBtn').onclick = () => setPlan(chainPlan(), chainStatus());
 
@@ -962,18 +911,12 @@ function refreshToday() {
   if (text === shownDate) return;
   shownDate = text;
   $('today').textContent = text;
-  const today = todayMonth().month, weekday = new Date().getDay();
-  const mark = (d, t) => d === t ? ' (היום)' : '';
-  const month = $('monthSel'), week = $('weekSel');
-  month.innerHTML = '';
-  week.innerHTML = '';
-  for (let d = 1; d <= 30; d++) {
-    month.add(new Option(`${hebNum(d)} בחודש${mark(d, today)}`, d));
-    if (d === 29) month.add(new Option(`כ״ט בחודש חסר${mark(0, today)}`, 0));
+  for (const d of book.dailies) {
+    const sel = $(`${d.id}Sel`), today = d.today();
+    sel.innerHTML = '';
+    for (const { value, label } of d.options(today)) sel.add(new Option(label, value));
+    sel.value = today;
   }
-  WEEKDAYS.forEach((name, d) => week.add(new Option(`יום ${name}${mark(d, weekday)}`, d)));
-  month.value = today;
-  week.value = weekday;
   if (pos) render();
   else syncDaily();
 }
@@ -1001,18 +944,19 @@ bindChain();
 const saved = store.get('session', null);
 const savedPlan = saved?.plan || (saved?.range && [saved.range]); // older versions saved a single range
 {
-  // Open on the reader's sequence when there is one, otherwise on today's reading by the month
-  plan = settings.chain.length ? chainPlan() : [todayMonth()];
+  // Open on the reader's sequence when there is one, otherwise on the first daily reading of today
+  const chain = chainPlan();
+  plan = chain.length ? chain : [todaySegment(book.dailies[0])];
   pos = [...plan[0].start];
   render();
-  setStatus(settings.chain.length ? chainStatus() : plan[0].label);
+  setStatus(chain.length ? chainStatus() : plan[0].label);
   if (saved) store.set('session', saved);
 }
 // Offer to resume only when it would land somewhere other than where the app just opened
 const sameAsOpening = JSON.stringify([savedPlan, saved?.seg || 0, saved?.pos]) === JSON.stringify([plan, seg, pos]);
 if (savedPlan && saved?.pos && !sameAsOpening) {
   $('resumeBtn').hidden = false;
-  $('resumeBtn').textContent = `המשך מפרק ${hebNum(saved.pos[0])} פסוק ${hebNum(saved.pos[1] + 1)}`;
+  $('resumeBtn').textContent = `המשך מ${book.where(...saved.pos).replace(' · ', ' ')}`;
   $('resumeBtn').onclick = () => {
     stop();
     plan = savedPlan;
@@ -1050,7 +994,7 @@ async function checkForUpdate(manual = false) {
   const { versionName } = await appInfo();
   $('versionText').textContent = `גרסה ${versionName}`;
   try {
-    const update = await findUpdate('ymalka82810/tehillim-whisper');
+    const update = await findUpdate('ymalka82810/tehillim-whisper', meta.releaseTag);
     if (update) {
       $('updateText').textContent = `גרסה חדשה זמינה (${update.version})`;
       $('updateBtn').onclick = () => startUpdate(update);

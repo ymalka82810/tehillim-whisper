@@ -17,6 +17,26 @@ android {
             ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+    // One APK per app, built from the same web code (scripts/build-www.mjs <app> fills the assets first).
+    // Tehillim keeps its original applicationId, so installed copies go on updating.
+    flavorDimensions = ["book"]
+    productFlavors {
+        tehillim {
+            dimension "book"
+            applicationId "io.github.ymalka82810.tehillim"
+            resValue "string", "app_name", "תהילים בדרך"
+        }
+        chumash {
+            dimension "book"
+            applicationId "io.github.ymalka82810.chumash"
+            resValue "string", "app_name", "חומש בדרך"
+        }
+        tanya {
+            dimension "book"
+            applicationId "io.github.ymalka82810.tanya"
+            resValue "string", "app_name", "תניא בדרך"
+        }
+    }
     signingConfigs {
         release {
             def keystore = System.getenv("ANDROID_KEYSTORE_FILE")
