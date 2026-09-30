@@ -1,4 +1,4 @@
-"""Renders every verse of data/tehillim.json in the recorded voices, and packs them for the app.
+"""Renders every verse of an app's data (data/<app>.json) in the recorded voices, and packs them for the app.
 
 Speech is Pocket TTS (Kyutai, Hebrew adapter by thewh1teagle, CC BY 4.0) fed with IPA from Phonikud.
 The stress of each word comes from the te'amim (the U+05AB marks in the data), so mil'el words are
@@ -8,12 +8,15 @@ read mil'el; unmarked words are milra.
     uv run render.py omer            # renders what's missing, then packs
     uv run render.py liat --chapters 1-10
     uv run render.py omer --pack     # pack only
+    uv run render.py omer --app chumash --chapters 1-3
+    uv run render.py omer --app chumash --chapters 1-17 --no-pack   # several at once, then --pack
 
-Each verse is cached as scripts/audio/.cache/<voice>/<ccc>-<vvv>.ogg (verse 000 is the chapter
-announcement). Packing writes audio/<voice>/<ccc>.bin, the chapter's clips back to back, and
-audio/index.json with the byte length of each clip, so the app can slice a chapter into playable files.
+Each verse is cached as <cache>/<voice>/<ccc>-<vvv>.ogg (verse 000 is the chapter announcement).
+Packing writes <out>/<voice>/<ccc>.bin, the chapter's clips back to back, and <out>/index.json with the
+byte length of each clip, so the app can slice a chapter into playable files. Each app's data, cache and
+output folders are in APPS (Tehillim keeps the original ones, .cache/ and audio/).
 """
-import argparse, hashlib, io, json, re, sys
+import argparse, hashlib, io, json, os, re, sys, time
 from pathlib import Path
 
 import numpy as np
@@ -22,7 +25,6 @@ from phonikud import phonemize
 
 ROOT = Path(__file__).resolve().parents[2]
 CACHE = Path(__file__).parent / ".cache"
-OUT = ROOT / "audio"
 MODEL = Path(__file__).parent / "models" / "pocket-tts-english-ipa.onnx"
 VOICES = {"omer": "עומר", "liat": "ליאת"}
 OPUS_LEVEL = 0.9  # libsndfile's Opus compression level; ~32 kbps for this speech
@@ -63,7 +65,8 @@ def mark_vocal_shva(word):
 
 def verse_ipa(verse):
     t = verse.replace("׃", "").replace("־", " ").replace("ׇ", "ֹ")
-    return phonemize(" ".join(mark_vocal_shva(divine_name(w)) for w in t.split()))
+    words = [(w.rstrip(","), w[len(w.rstrip(",")):]) for w in t.split()]  # a pause comma stays after its word
+    return phonemize(" ".join(mark_vocal_shva(divine_name(w)) + pause for w, pause in words))
 
 
 # Chapter announcement: "פרק" and the chapter's letters by name
@@ -81,9 +84,39 @@ def chapter_letters(n):
     return s + " יכלמנסעפצ"[n // 10].strip() + " אבגדהוזחט"[n % 10].strip()
 
 
-def announcement_ipa(chapter):
+def letter_names(n):
+    return " ".join(LETTER_NAMES[c] for c in chapter_letters(n))
+
+
+def chapter_announcement(chapter):
     # The chapter is called by its letters, as it is written: "פרק קוף יוד טית"
-    return phonemize("פֶּ֫רֶק " + " ".join(LETTER_NAMES[c] for c in chapter_letters(chapter)))
+    return "פֶּ֫רֶק " + letter_names(chapter)
+
+
+# The five books by their first chapter in data/chumash.json (all their chapters, one after another)
+BOOKS = [(1, "בְּרֵאשִׁית"), (51, "שְׁמוֹת"), (91, "וַיִּקְרָא"), (118, "בְּמִדְבַּר"), (154, "דְּבָרִים")]
+
+
+def chumash_announcement(chapter):
+    first, name = [b for b in BOOKS if b[0] <= chapter][-1]
+    return f"{name} פֶּ֫רֶק {letter_names(chapter - first + 1)}"
+
+
+def tanya_announcement(chapter):
+    # The unit's spoken title ("לִקּוּטֵי אֲמָרִים, פֶּ֫רֶק אָ֫לֶף"), written by scripts/build-tanya.mjs
+    titles = json.loads((ROOT / "data" / "tanya-announce.json").read_text(encoding="utf-8"))
+    return titles[chapter - 1]
+
+
+# Each app: its data, where its verses are cached and packed, and its chapter announcement (pointed text).
+# "speech" (optional): the same verses with commas at the pausing accents, read instead of the data's (build-data.mjs)
+APPS = {
+    "tehillim": {"data": "data/tehillim.json", "cache": CACHE, "out": ROOT / "audio", "announce": chapter_announcement},
+    "chumash": {"data": "data/chumash.json", "speech": "data/chumash-speech.json", "cache": CACHE / "chumash",
+                "out": ROOT / "audio-chumash", "announce": chumash_announcement},
+    "tanya": {"data": "data/tanya.json", "speech": "data/tanya-speech.json", "cache": CACHE / "tanya",
+              "out": ROOT / "audio-tanya", "announce": tanya_announcement},
+}
 
 
 # ---------- Rendering ----------
@@ -99,13 +132,14 @@ def trim(samples, sr, threshold=0.012, margin=0.06):
     return samples[max(0, loud[0] - pad): loud[-1] + pad]
 
 
-def render(voice, jobs, force=False):
+def render(voice, jobs, cache, force=False, threads=2):
     from pocket_tts_onnx import PocketTTS
-    tts = PocketTTS(str(MODEL))
-    folder = CACHE / voice
+    tts = PocketTTS(str(MODEL), num_threads=threads)
+    folder = cache / voice
     folder.mkdir(parents=True, exist_ok=True)
     meta_path = folder / "meta.json"
     meta = json.loads(meta_path.read_text(encoding="utf-8")) if meta_path.exists() else {}
+    mine = {}  # rendered by this process
     done = 0
     for key, ipa in jobs:
         path = folder / f"{key}.ogg"
@@ -126,23 +160,38 @@ def render(voice, jobs, force=False):
         buf = io.BytesIO()
         sf.write(buf, s, sr, format="OGG", subtype="OPUS", compression_level=OPUS_LEVEL)
         path.write_bytes(buf.getvalue())
-        meta[key] = {"ipa": digest, "pace": round(pace, 4), "seed": seed, "tries": len(takes)}
+        meta[key] = mine[key] = {"ipa": digest, "pace": round(pace, 4), "seed": seed, "tries": len(takes)}
         done += 1
+        save_meta(meta_path, mine)  # every clip, so stopping the render loses nothing
         if done % 20 == 0:
-            meta_path.write_text(json.dumps(meta, indent=0), encoding="utf-8")
             print(f"{voice}: {key} ({done} rendered)", flush=True)
-    meta_path.write_text(json.dumps(meta, indent=0), encoding="utf-8")
     return meta
 
 
-def pack(chapters):
+def save_meta(path, mine):
+    """Several processes may render the same voice (different chapters): merge this one's entries into
+    what is on disk, and replace the file whole so no one reads it half written."""
+    for attempt in range(20):
+        try:
+            meta = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
+            meta.update(mine)
+            tmp = path.with_name(f"meta.{os.getpid()}.tmp")
+            tmp.write_text(json.dumps(meta, indent=0), encoding="utf-8")
+            os.replace(tmp, path)
+            return
+        except (PermissionError, json.JSONDecodeError):  # Windows: another process has the file open right now
+            time.sleep(0.2 + 0.1 * attempt)
+    raise RuntimeError(f"could not save {path}")
+
+
+def pack(chapters, cache, out):
     index = {"voices": {}, "chapters": len(chapters)}
     versions = []
     for voice, label in VOICES.items():
-        folder = CACHE / voice
+        folder = cache / voice
         if not folder.exists():
             continue
-        (OUT / voice).mkdir(parents=True, exist_ok=True)
+        (out / voice).mkdir(parents=True, exist_ok=True)
         lengths = {}
         for c, verses in enumerate(chapters, 1):
             clips = [folder / f"{c:03}-{v:03}.ogg" for v in range(len(verses) + 1)]
@@ -150,14 +199,14 @@ def pack(chapters):
                 continue
             data = [p.read_bytes() for p in clips]
             blob = b"".join(data)
-            (OUT / voice / f"{c:03}.bin").write_bytes(blob)
+            (out / voice / f"{c:03}.bin").write_bytes(blob)
             lengths[c] = [len(d) for d in data]
             versions.append(hashlib.sha1(blob).hexdigest())
         index["voices"][voice] = {"label": label, "chapters": lengths}
         print(f"{voice}: {len(lengths)} chapters packed")
     # One version for the whole set: the app keys its downloads by it, so re-rendering replaces them
     index["version"] = hashlib.sha1("".join(versions).encode()).hexdigest()[:10]
-    (OUT / "index.json").write_text(json.dumps(index, separators=(",", ":")), encoding="utf-8")
+    (out / "index.json").write_text(json.dumps(index, separators=(",", ":")), encoding="utf-8")
 
 
 def parse_chapters(spec):
@@ -174,16 +223,22 @@ def main():
     ap.add_argument("--chapters", help="e.g. 1-10,23,119")
     ap.add_argument("--force", action="store_true", help="re-render even cached verses")
     ap.add_argument("--pack", action="store_true", help="only pack what is cached")
+    ap.add_argument("--no-pack", action="store_true", help="render only (for parallel runs; pack once when all are done)")
+    ap.add_argument("--threads", type=int, default=2, help="CPU threads for the speech model")
+    ap.add_argument("--app", choices=list(APPS), default="tehillim")
     args = ap.parse_args()
-    chapters = json.loads((ROOT / "data/tehillim.json").read_text(encoding="utf-8"))
+    app = APPS[args.app]
+    chapters = json.loads((ROOT / app["data"]).read_text(encoding="utf-8"))
     if args.voice and not args.pack:
+        spoken = json.loads((ROOT / app["speech"]).read_text(encoding="utf-8")) if "speech" in app else chapters
         wanted = parse_chapters(args.chapters) if args.chapters else range(1, len(chapters) + 1)
         jobs = []
         for c in wanted:
-            jobs.append((f"{c:03}-000", announcement_ipa(c)))
-            jobs += [(f"{c:03}-{v:03}", verse_ipa(text)) for v, text in enumerate(chapters[c - 1], 1)]
-        render(args.voice, jobs, args.force)
-    pack(chapters)
+            jobs.append((f"{c:03}-000", phonemize(" ".join(map(mark_vocal_shva, app["announce"](c).split())))))
+            jobs += [(f"{c:03}-{v:03}", verse_ipa(text)) for v, text in enumerate(spoken[c - 1], 1)]
+        render(args.voice, jobs, app["cache"], args.force, args.threads)
+    if not args.no_pack:
+        pack(chapters, app["cache"], app["out"])
 
 
 if __name__ == "__main__":

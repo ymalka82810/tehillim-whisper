@@ -1,8 +1,16 @@
-// Fetches Psalms (Miqra according to the Masorah, CC-BY-SA) from Sefaria and writes data/tehillim.json
-// Usage: node scripts/build-data.mjs
+// Fetches an app's text (Miqra according to the Masorah, CC-BY-SA) from Sefaria and writes data/<app>.json
+// Usage: node scripts/build-data.mjs [tehillim|chumash]
+//   tehillim: data/tehillim.json, the 150 chapters of Psalms
+//   chumash: data/chumash.json, the 187 chapters of the five books one after another; data/chumash-speech.json, the same
+//     with pauses for the recorded voices (see clean); and apps/chumash/torah.js
+//     with the books, the parshiyot with their aliyot, and a calendar of the weekly parsha (from hebcal, so the app
+//     knows the parsha without a network)
 import { writeFile, mkdir } from 'node:fs/promises';
+import { HebrewCalendar, HDate, Locale, months, parshiot } from '@hebcal/core';
+import { getLeyningForParsha } from '@hebcal/leyning';
 
-const SOURCE = 'https://www.sefaria.org/api/v3/texts/Psalms?version=hebrew|Miqra according to the Masorah';
+const app = process.argv[2] || 'tehillim';
+const source = book => `https://www.sefaria.org/api/v3/texts/${book}?version=hebrew|Miqra according to the Masorah`;
 
 // Words stressed before the last syllable (mil'el) keep a U+05AB (ole) on their stressed letter, taken from the te'amim
 const STRESS = '\u05ab';
@@ -50,16 +58,39 @@ function markStress(text) {
   }).join('');
 }
 
-function clean(html) {
+// The main pausing accents: etnachta, segolta, zakef katan, zakef gadol. A clause that is still long between them
+// also pauses at the lesser ones: tipcha, revia, pashta, tevir.
+const PAUSING = /[\u0591\u0592\u0594\u0595]/;
+const LESSER_PAUSING = /[\u0596\u0597\u0599\u059b]/;
+const LONG_CLAUSE = 40; // letters
+
+const letters = words => words.join("").replace(/[^\u05d0-\u05ea]/g, "").length;
+
+function addPauses(text) {
+  const words = text.split(/\s+/);
+  const clauses = [[]];
+  words.forEach((w, i) => {
+    clauses.at(-1).push(w);
+    if (PAUSING.test(w) && i < words.length - 1) clauses.push([]);
+  });
+  return clauses.map(clause => clause.map((w, i) => i < clause.length - 1
+    && (PAUSING.test(w) || (letters(clause) > LONG_CLAUSE && LESSER_PAUSING.test(w))) ? `${w},` : w).join(' ')).join(', ');
+}
+
+// withPauses: a comma after each word with a pausing accent. Only for the recorded voices (data/<app>-speech.json):
+// the speech model splits long verses at punctuation, and without any it may skip words.
+function clean(html, withPauses = false) {
   const text = html
     .replace(/<span class="mam-kq-k">.*?<\/span>/g, '')
     .replace(/<span class="mam-spi-[^"]*">.*?<\/span>/g, '')
+    .replace(/<sup class="footnote-marker">.*?<\/sup><i class="footnote">.*?<\/i>/g, '') // other manuscripts' readings
     .replace(/<small>.*?<\/small>|<b>.*?<\/b>/g, '')
     .replace(/<br>/g, ' ')
     .replace(/<[^>]+>/g, '')
     .replace(/&thinsp;|&nbsp;/g, ' ')
     .replace(/[\[\]()]/g, '');
-  return markStress(text)
+  const marked = markStress(text);
+  return (withPauses ? addPauses(marked.trim()) : marked)
     // cantillation, meteg, rafe, paseq, upper/lower dots, inverted nun, CGJ
     .replace(/[\u0591-\u05af\u05bd\u05bf\u05c0\u05c4\u05c5\u05c6\u034f]/g, '')
     .replaceAll(PLACEHOLDER, STRESS)
@@ -67,16 +98,106 @@ function clean(html) {
     .trim();
 }
 
-const res = await fetch(SOURCE);
-if (!res.ok) throw new Error(`HTTP ${res.status}`);
-const { versions } = await res.json();
-const chapters = versions[0].text.map(ch => ch.map(clean));
+// The book's chapters as Sefaria's HTML, [chapter][verse]
+async function fetchBook(book) {
+  const res = await fetch(source(book));
+  if (!res.ok) throw new Error(`${book}: HTTP ${res.status}`);
+  return (await res.json()).versions[0].text;
+}
+const cleanAll = (chapters, withPauses) => chapters.map(ch => ch.map(html => clean(html, withPauses)));
 
-if (chapters.length !== 150) throw new Error(`expected 150 chapters, got ${chapters.length}`);
-const leftovers = chapters.flat().join('').match(/[^\u05d0-\u05ea\u05b0-\u05bc\u05be\u05c1\u05c2\u05c3\u05c7\u05ab ]/g);
-if (leftovers) throw new Error(`unexpected characters: ${[...new Set(leftovers)].join(' ')}`);
+async function write(name, chapters, expected, extra = '') {
+  if (chapters.length !== expected) throw new Error(`expected ${expected} chapters, got ${chapters.length}`);
+  const leftovers = chapters.flat().join('').match(new RegExp(`[^\\u05d0-\\u05ea\\u05b0-\\u05bc\\u05be\\u05c1\\u05c2\\u05c3\\u05c7\\u05ab ${extra}]`, 'g'));
+  if (leftovers) throw new Error(`unexpected characters: ${[...new Set(leftovers)].join(' ')}`);
+  await mkdir(new URL('../data/', import.meta.url), { recursive: true });
+  await writeFile(new URL(`../data/${name}.json`, import.meta.url), JSON.stringify(chapters));
+  const milel = chapters.flat().join('').split(STRESS).length - 1;
+  console.log(`${name}: wrote ${chapters.flat().length} verses, ${milel} mil'el words marked`);
+}
 
-await mkdir(new URL('../data/', import.meta.url), { recursive: true });
-await writeFile(new URL('../data/tehillim.json', import.meta.url), JSON.stringify(chapters));
-const milel = chapters.flat().join('').split(STRESS).length - 1;
-console.log(`wrote ${chapters.flat().length} verses, ${milel} mil'el words marked`);
+// ---------- Chumash: books, parshiyot and the weekly calendar ----------
+const BOOKS = [['Genesis', 'בראשית'], ['Exodus', 'שמות'], ['Leviticus', 'ויקרא'], ['Numbers', 'במדבר'], ['Deuteronomy', 'דברים']];
+const CALENDAR_YEARS = [2025, 2045]; // the civil years the parsha calendar covers
+const JOINED = [['Vayakhel', 'Pekudei'], ['Tazria', 'Metzora'], ['Achrei Mot', 'Kedoshim'], ['Behar', 'Bechukotai'],
+  ['Chukat', 'Balak'], ['Matot', 'Masei'], ['Nitzavim', 'Vayeilech']];
+// The names as they're usually written (hebcal has some in the Torah's own spelling)
+const SPELLING = { 'לך־לך': 'לך לך', 'מצרע': 'מצורע', 'קדשים': 'קדושים', 'בחקתי': 'בחוקותי', 'בהעלתך': 'בהעלותך', 'שלח־לך': 'שלח',
+  'קורח': 'קרח', 'כי־תצא': 'כי תצא', 'כי־תבוא': 'כי תבוא' };
+
+async function buildChumash() {
+  const books = [];
+  const html = [];
+  for (const [en, name] of BOOKS) {
+    const text = await fetchBook(en);
+    books.push({ en, name, first: html.length + 1, chapters: text.length });
+    html.push(...text);
+  }
+  const chapters = cleanAll(html);
+  await write('chumash', chapters, 187);
+  await write('chumash-speech', cleanAll(html, true), 187, ',');
+
+  // A verse as [chapter, verse]: chapters numbered through the five books, verses from 1
+  const at = (en, ref) => {
+    const b = books.find(b => b.en === en);
+    const [c, v] = ref.split(':').map(Number);
+    if (!b || c > b.chapters || v < 1 || v > chapters[b.first + c - 2].length) throw new Error(`bad ref ${en} ${ref}`);
+    return [b.first + c - 1, v];
+  };
+  const readings = [...parshiot.map(p => [p]), ...JOINED].map(parts => {
+    const { fullkriyah } = getLeyningForParsha(parts.length > 1 ? parts : parts[0]);
+    const aliyot = [1, 2, 3, 4, 5, 6, 7].map(n => [...at(fullkriyah[n].k, fullkriyah[n].b), ...at(fullkriyah[n].k, fullkriyah[n].e)]);
+    const name = parts.map(p => Locale.gettext(p, 'he-x-NoNikud')).map(n => SPELLING[n] || n).join('-');
+    if (/[a-z]/i.test(name)) throw new Error(`no Hebrew name for ${parts}`);
+    return { key: parts.join('-'), name, aliyot };
+  });
+  const index = parsha => {
+    const i = readings.findIndex(r => r.key === parsha.join('-'));
+    if (i < 0) throw new Error(`unknown reading ${parsha}`);
+    return i;
+  };
+
+  // The readings in order, each on its day: every Shabbat that isn't a festival, and Simchat Torah
+  // (Vezot Haberakhah, the 22nd of Tishrei in Israel and the 23rd abroad)
+  const dayNumber = d => Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()) / 86400000;
+  const calendar = {};
+  for (const [id, il] of [['il', true], ['diaspora', false]]) {
+    const events = [];
+    const to = new Date(CALENDAR_YEARS[1] + 1, 0, 1);
+    for (let d = new Date(CALENDAR_YEARS[0], 0, 1); d < to; d.setDate(d.getDate() + 1)) {
+      const hd = new HDate(d);
+      if (d.getDay() === 6) {
+        const r = HebrewCalendar.getSedra(hd.getFullYear(), il).lookup(hd);
+        if (!r.chag) events.push([dayNumber(d), index(r.parsha)]);
+      }
+      if (hd.getMonth() === months.TISHREI && hd.getDate() === (il ? 22 : 23)) events.push([dayNumber(d), index(['Vezot Haberakhah'])]);
+    }
+    // [first day, first reading, days to the next, its reading, ...]
+    calendar[id] = events.flatMap(([day, r], i) => [i ? day - events[i - 1][0] : day, r]);
+  }
+
+  const module = `// Generated by scripts/build-data.mjs chumash, from hebcal (@hebcal/core, @hebcal/leyning). Don't edit.
+
+// The five books: their first chapter in data/chumash.json and how many chapters they have
+export const BOOKS = ${JSON.stringify(books.map(({ name, first, chapters }) => ({ name, first, chapters })))};
+
+// The weekly readings: the 54 parshiyot, then the joined ones. Each has its 7 aliyot as
+// [fromChapter, fromVerse, toChapter, toVerse], chapters numbered as in data/chumash.json and verses from 1.
+export const READINGS = [
+${readings.map(r => `  ${JSON.stringify({ name: r.name, aliyot: r.aliyot })},`).join('\n')}
+];
+
+// When each reading is read, ${CALENDAR_YEARS.join('\u2013')}, in Israel and abroad: pairs of [day, index in READINGS], where the
+// first day is in days since 1970-01-01 and every other is in days since the one before. A Shabbat that is a festival
+// has no reading, and Simchat Torah reads Vezot Haberakhah.
+export const CALENDAR = {
+${Object.entries(calendar).map(([id, flat]) => `  ${id}: ${JSON.stringify(flat)},`).join('\n')}
+};
+`;
+  await writeFile(new URL('../apps/chumash/torah.js', import.meta.url), module);
+  console.log(`chumash: ${readings.length} readings, parsha calendar ${CALENDAR_YEARS.join('\u2013')}`);
+}
+
+if (app === 'tehillim') await write('tehillim', cleanAll(await fetchBook('Psalms')), 150);
+else if (app === 'chumash') await buildChumash();
+else throw new Error(`unknown app ${app}`);

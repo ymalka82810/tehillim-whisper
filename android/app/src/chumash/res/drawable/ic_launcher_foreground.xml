@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- A Torah scroll, open between its two rollers; kept inside the 66dp adaptive-icon safe zone (apps/chumash/icon.svg) -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path android:pathData="M39,37H69V73H39Z"><aapt:attr name="android:fillColor"><gradient android:type="linear" android:startX="0" android:startY="37" android:endX="0" android:endY="73"><item android:offset="0" android:color="#FFFFF6E3" /><item android:offset="1" android:color="#FFE9D09C" /></gradient></aapt:attr></path>
+    <path android:pathData="M55.5,42H65.5M55.5,46.5H65.5M55.5,51H65.5M55.5,55.5H65.5M55.5,60H65.5M55.5,64.5H65.5M59,69H65.5M42.5,42H52.5M42.5,46.5H52.5M42.5,51H52.5M42.5,55.5H52.5M42.5,60H52.5M42.5,64.5H52.5M46,69H52.5" android:strokeWidth="1.6" android:strokeLineCap="round" android:strokeColor="#FFB58A3E" />
+    <path android:pathData="M35,26V33M35,77V84M73,26V33M73,77V84" android:strokeWidth="3" android:strokeLineCap="round"><aapt:attr name="android:strokeColor"><gradient android:type="linear" android:startX="0" android:startY="26" android:endX="0" android:endY="84"><item android:offset="0" android:color="#FFFFF0C2" /><item android:offset="0.45" android:color="#FFF0C465" /><item android:offset="1" android:color="#FFC28A2F" /></gradient></aapt:attr></path>
+    <path android:pathData="M31,37A4,4 0 0,1 39,37V73A4,4 0 0,1 31,73ZM69,37A4,4 0 0,1 77,37V73A4,4 0 0,1 69,73Z"><aapt:attr name="android:fillColor"><gradient android:type="linear" android:startX="0" android:startY="26" android:endX="0" android:endY="84"><item android:offset="0" android:color="#FFFFF0C2" /><item android:offset="0.45" android:color="#FFF0C465" /><item android:offset="1" android:color="#FFC28A2F" /></gradient></aapt:attr></path>
+    <path android:pathData="M30.5,31.5H39.5A1.5,1.5 0 0,1 39.5,34.5H30.5A1.5,1.5 0 0,1 30.5,31.5ZM30.5,75.5H39.5A1.5,1.5 0 0,1 39.5,78.5H30.5A1.5,1.5 0 0,1 30.5,75.5ZM68.5,31.5H77.5A1.5,1.5 0 0,1 77.5,34.5H68.5A1.5,1.5 0 0,1 68.5,31.5ZM68.5,75.5H77.5A1.5,1.5 0 0,1 77.5,78.5H68.5A1.5,1.5 0 0,1 68.5,75.5Z"><aapt:attr name="android:fillColor"><gradient android:type="linear" android:startX="0" android:startY="26" android:endX="0" android:endY="84"><item android:offset="0" android:color="#FFFFF0C2" /><item android:offset="0.45" android:color="#FFF0C465" /><item android:offset="1" android:color="#FFC28A2F" /></gradient></aapt:attr></path>
+</vector>

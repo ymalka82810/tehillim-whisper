@@ -37,6 +37,14 @@
 
 הטקסט נמצא ב-`data/tehillim.json` ונוצר בעזרת `node scripts/build-data.mjs`.
 
+### חומש בדרך
+אפליקציה שנייה מאותו קוד: `apps/chumash/config.js`. `node scripts/build-data.mjs chumash` יוצר את:
+- `data/chumash.json`: 187 הפרקים של חמשת החומשים ברצף.
+- `data/chumash-speech.json`: אותו טקסט עם פסיקים בטעמים המפסיקים. הוא משמש רק להקלטה, כדי שפסוק ארוך יתחלק ולא ידלגו בו על מילים.
+- `apps/chumash/torah.js`: הספרים, הפרשות והעליות, ולוח של פרשת השבוע לארץ ישראל ולחוץ לארץ עד 2045, לפי hebcal.
+
+הקריאה היומית היא העלייה של היום בפרשת השבוע: ביום ראשון עלייה ראשונה, ובשבת שביעי. להרצה מקומית: `node scripts/build-www.mjs chumash` ואז `npx serve www`. ה-APK נבנה ב-CI עם tag מסוג `chumash-v1.0.<build>`.
+
 ### הקולות המוקלטים
 נוצרים מהטקסט ב-`scripts/audio/render.py` (צריך [uv](https://docs.astral.sh/uv/)): Phonikud ממיר כל פסוק לתעתיק IPA עם ההטעמה מהטעמים, ו-Pocket TTS מקריא אותו. כל פסוק נבדק לפי קצב הדיבור שלו, וקטע שנשמע קטוע או ארוך מדי נוצר מחדש.
 
@@ -45,11 +53,12 @@ cd scripts/audio
 mkdir models && curl -L -o models/pocket-tts-english-ipa.onnx https://huggingface.co/thewh1teagle/pocket-tts-onnx/resolve/main/pocket-tts-english-ipa.onnx
 uv run render.py omer    # כשעה וחצי למעבד רגיל; ממשיך מאיפה שעצר
 uv run render.py liat
+uv run render.py omer --app chumash   # כ-5 שעות לקול
 ```
 
-התוצאה: `audio/<voice>/<ccc>.bin` (כל פרק קובץ אחד, הקטעים ברצף, קטע 0 הוא הכרזת הפרק) ו-`audio/index.json` עם אורכי הקטעים. אחרי שינוי בטקסט מריצים שוב, ורק הפסוקים שהשתנו נוצרים מחדש.
+התוצאה: `audio/<voice>/<ccc>.bin` (כל פרק קובץ אחד, הקטעים ברצף, קטע 0 הוא הכרזת הפרק) ו-`audio/index.json` עם אורכי הקטעים. לחומש הקבצים נשמרים ב-`audio-chumash/`. אחרי שינוי בטקסט מריצים שוב, ורק הפסוקים שהשתנו נוצרים מחדש.
 
 ## קרדיט
-טקסט: [מקרא על פי המסורה](https://he.wikisource.org/wiki/מקרא_על_פי_המסורה) (CC-BY-SA), דרך [Sefaria](https://www.sefaria.org). הטעמים הוסרו (מלבד סימון ההברה המוטעמת במילים מלעיליות), והקרי נבחר במקום הכתיב.
+טקסט: [מקרא על פי המסורה](https://he.wikisource.org/wiki/מקרא_על_פי_המסורה) (CC-BY-SA), דרך [Sefaria](https://www.sefaria.org). הטעמים הוסרו (מלבד סימון ההברה המוטעמת במילים מלעיליות), והקרי נבחר במקום הכתיב. פרשות, עליות ולוח השנה בחומש: [Hebcal](https://www.hebcal.com).
 
 קולות: [Pocket TTS](https://github.com/kyutai-labs/pocket-tts) של Kyutai, בגרסת [pocket-tts-onnx](https://github.com/thewh1teagle/pocket-tts-onnx) עם מתאם עברי (CC BY 4.0). הגייה: [Phonikud](https://github.com/phonikud/phonikud) (CC BY 4.0).

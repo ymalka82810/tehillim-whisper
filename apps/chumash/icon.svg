@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 108 108">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#26356a"/>
+      <stop offset="1" stop-color="#0c1124"/>
+    </linearGradient>
+    <radialGradient id="halo" cx="54" cy="52" r="36" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#4a63b8" stop-opacity=".55"/>
+      <stop offset="1" stop-color="#4a63b8" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="gold" x1="0" y1="26" x2="0" y2="84" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#fff0c2"/>
+      <stop offset=".45" stop-color="#f0c465"/>
+      <stop offset="1" stop-color="#c28a2f"/>
+    </linearGradient>
+    <linearGradient id="parchment" x1="0" y1="37" x2="0" y2="73" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#fff6e3"/>
+      <stop offset="1" stop-color="#e9d09c"/>
+    </linearGradient>
+  </defs>
+  <rect width="108" height="108" fill="url(#bg)"/>
+  <circle cx="54" cy="52" r="36" fill="url(#halo)"/>
+  <!-- A Torah scroll, open between its two rollers; kept inside the 66dp adaptive-icon safe zone -->
+  <path d="M39 37H69V73H39Z" fill="url(#parchment)"/>
+  <path d="M55.5 42H65.5M55.5 46.5H65.5M55.5 51H65.5M55.5 55.5H65.5M55.5 60H65.5M55.5 64.5H65.5M59 69H65.5M42.5 42H52.5M42.5 46.5H52.5M42.5 51H52.5M42.5 55.5H52.5M42.5 60H52.5M42.5 64.5H52.5M46 69H52.5" stroke="#b58a3e" stroke-width="1.6" stroke-linecap="round"/>
+  <path d="M35 26V33M35 77V84M73 26V33M73 77V84" stroke="url(#gold)" stroke-width="3" stroke-linecap="round"/>
+  <path d="M31 37A4 4 0 0 1 39 37V73A4 4 0 0 1 31 73ZM69 37A4 4 0 0 1 77 37V73A4 4 0 0 1 69 73Z" fill="url(#gold)"/>
+  <path d="M30.5 31.5H39.5A1.5 1.5 0 0 1 39.5 34.5H30.5A1.5 1.5 0 0 1 30.5 31.5ZM30.5 75.5H39.5A1.5 1.5 0 0 1 39.5 78.5H30.5A1.5 1.5 0 0 1 30.5 75.5ZM68.5 31.5H77.5A1.5 1.5 0 0 1 77.5 34.5H68.5A1.5 1.5 0 0 1 68.5 31.5ZM68.5 75.5H77.5A1.5 1.5 0 0 1 77.5 78.5H68.5A1.5 1.5 0 0 1 68.5 75.5Z" fill="url(#gold)"/>
+</svg>
