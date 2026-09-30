@@ -12,8 +12,9 @@ jobs:
   apk:
     runs-on: ubuntu-24.04
     strategy:
+      fail-fast: false # one app's failed build mustn't cancel the others' releases
       matrix:
-        # One APK per app (apps/<app>/config.js). Chumash and Tanya join once they have their data.
+        # One APK per app (apps/<app>/config.js). Chumash and Tanya join once they have their recorded voices.
         include:
           - app: tehillim
             name: תהילים בדרך

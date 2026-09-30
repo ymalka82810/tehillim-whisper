@@ -1,6 +1,6 @@
 // Copies one app's static web app into www/ for Capacitor (the repo root is also served as-is by GitHub Pages, as Tehillim)
 // Usage: node scripts/build-www.mjs [tehillim|chumash|tanya]
-import { cp, rm, mkdir, readFile, writeFile, access } from 'node:fs/promises';
+import { cp, rm, mkdir, readFile, writeFile, access, readdir } from 'node:fs/promises';
 
 const app = process.argv[2] || 'tehillim';
 const root = new URL('../', import.meta.url);
@@ -20,10 +20,24 @@ await cp(new URL(meta.data, root), new URL(meta.data, out));
 for (const f of ['icon.svg', 'manifest.webmanifest']) await cp(new URL(await own(f), root), new URL(f, out));
 await writeFile(new URL('app-config.js', out), `export * from './apps/${app}/config.js';\n`);
 
-// The name shows on the splash before the app's script runs, so it goes into the page itself
+// The name and picture show on the splash before the app's script runs, so they go into the page itself
 const tehillim = (await import(new URL('apps/tehillim/config.js', root))).meta;
-const page = await readFile(new URL('index.html', out), 'utf8');
-await writeFile(new URL('index.html', out), page.replaceAll(tehillim.name, meta.name).replaceAll(tehillim.tagline, meta.tagline));
+let page = (await readFile(new URL('index.html', out), 'utf8')).replaceAll(tehillim.name, meta.name).replaceAll(tehillim.tagline, meta.tagline);
+if (await exists(new URL(`apps/${app}/splash.svg`, root))) {
+  const splash = (await readFile(new URL(`apps/${app}/splash.svg`, root), 'utf8')).trim();
+  page = page.replace(/<svg class="lyre"[\s\S]*?<\/svg>/, splash);
+}
+await writeFile(new URL('index.html', out), page);
+
+// The service worker (web only) caches this app's files
+const appFiles = (await readdir(new URL(`apps/${app}/`, root))).filter(f => f.endsWith('.js')).map(f => `'apps/${app}/${f}'`);
+const worker = (await readFile(new URL('sw.js', out), 'utf8'))
+  .replace("'tehillim-v", `'${app}-v`)
+  .replace("'tehillim-audio'", `'${meta.audioCache}'`)
+  .replace("'apps/tehillim/config.js'", appFiles.join(', '))
+  .replace("'data/tehillim.json'", `'${meta.data}'`)
+  .replace("'/audio/'", `'/${meta.audio}'`);
+await writeFile(new URL('sw.js', out), worker);
 
 const index = JSON.parse(await readFile(new URL(`${meta.audio}index.json`, root), 'utf8').catch(() => 'null'));
 if (index) {

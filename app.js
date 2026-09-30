@@ -56,7 +56,7 @@ async function fetchWithProgress(url, onProgress) {
 }
 
 const chapters = await fetchWithProgress(meta.data, f => splash.set(f * 70));
-const book = content(chapters);
+const book = content(chapters, store);
 const UNITS = chapters.length;
 splash.set(75);
 
@@ -70,8 +70,14 @@ document.body.classList.add(native ? 'is-native' : 'is-web');
 // ---------- Daily readings ----------
 // A segment is a range to read with its name ({ start, end, label }); a reading plan is segments read one after another.
 // The daily readings come from the app's config; a daily segment also carries which reading and day it is.
+// A config may mark a day whose part isn't in the app yet with { missing: text }: it's shown, not read.
 const dailySegment = (d, value) => ({ ...d.segment(value), daily: d.id, value });
 const todaySegment = d => dailySegment(d, d.today());
+const readable = s => !s.missing;
+function openDaily(s) {
+  if (s.missing) setStatus(s.missing);
+  else setPlan([s]);
+}
 
 function todayText() {
   const now = new Date();
@@ -276,7 +282,7 @@ const dailyOf = item => book.dailies.find(d => d.id === item.type);
 const chainItemLabel = item => dailyOf(item)?.chain || book.units(item.from, item.to);
 // A daily reading the app no longer has is left out
 const chainPlan = () => settings.chain.flatMap(item =>
-  item.type === 'chapters' ? [book.unitSegment(item.from, item.to)] : dailyOf(item) ? [todaySegment(dailyOf(item))] : []);
+  item.type === 'chapters' ? [book.unitSegment(item.from, item.to)] : dailyOf(item) ? [todaySegment(dailyOf(item))].filter(readable) : []);
 const chainStatus = () => `הרצף שלי · ${settings.chain.length} חלקים`;
 
 function saveChain(chain) {
@@ -437,7 +443,7 @@ function prioritize(p) {
 // The chosen plan from where the reader is, then earlier picks, the reader's sequence, today's readings, and the rest in order
 function downloadOrder() {
   const first = pos ? [...chaptersOf({ start: pos, end: plan[seg].end }), ...plan.slice(seg + 1).flatMap(chaptersOf)] : [];
-  first.push(...picked, ...chainPlan().flatMap(chaptersOf), ...book.dailies.flatMap(d => chaptersOf(todaySegment(d))));
+  first.push(...picked, ...chainPlan().flatMap(chaptersOf), ...book.dailies.map(todaySegment).filter(readable).flatMap(chaptersOf));
   if (pos) first.push(...Array.from({ length: UNITS - pos[0] + 1 }, (_, i) => pos[0] + i));
   return [...new Set([...first, ...Array.from({ length: UNITS }, (_, i) => i + 1)])];
 }
@@ -782,7 +788,7 @@ function lettersToNumber(s) {
   return hebNum(n).replace(/[׳״]/g, '') === letters.join('') ? n : null;
 }
 
-function spokenChapter(s) {
+function spokenNumber(s) {
   const words = s.split(' ').filter(Boolean);
   let n = null;
   if (/^\d+$/.test(s)) n = Number(s);
@@ -791,7 +797,20 @@ function spokenChapter(s) {
   // Hebrew cardinals are a plain sum: מאה עשרים ואחת = 100 + 20 + 1, חמש עשרה = 5 + 10
   const values = words.map(w => NUMBER_WORDS[w] ?? NUMBER_WORDS[w.replace(/^ו/, '')]);
   if (!n && values.every(Boolean)) n = values.reduce((a, b) => a + b, 0);
+  return n || null;
+}
+const spokenChapter = s => {
+  const n = spokenNumber(s);
   return n >= 1 && n <= UNITS ? n : null;
+};
+
+// Where "עבור ל…" goes, as { chapter } or { segment }. An app's config may name its own places (book.goTo).
+function goToTarget(rest) {
+  if (book.goTo) return book.goTo(rest, spokenNumber, pos);
+  rest = rest.replace(/^(?:אל |ל ?)?פרק /, '');
+  // "לקכא" is ל + קכא, but "למד" is the chapter itself: try the words as heard first
+  const chapter = spokenChapter(rest) || spokenChapter(rest.replace(/^(?:אל |ל ?)/, ''));
+  return chapter ? { chapter } : null;
 }
 
 function parseCommand(heard) {
@@ -799,11 +818,7 @@ function parseCommand(heard) {
   const verse = t.match(/פסוק (ה?בא|ה?קודם)/);
   if (verse) return { dir: verse[1].endsWith('בא') ? 1 : -1 };
   const go = t.match(/(?:^| )(?:ת|ל)?(?:עבור|חזור|החלף|החליף|חליף) (.+)$/);
-  if (!go) return null;
-  const rest = go[1].replace(/^(?:אל |ל ?)?פרק /, '');
-  // "לקכא" is ל + קכא, but "למד" is the chapter itself: try the words as heard first
-  const chapter = spokenChapter(rest) || spokenChapter(rest.replace(/^(?:אל |ל ?)/, ''));
-  return chapter ? { chapter } : null;
+  return go ? goToTarget(go[1]) : null;
 }
 
 // Within the plan when the chapter is in it (the current segment first), otherwise just that chapter
@@ -846,7 +861,7 @@ async function listenForCommand() {
   stop(); // the recognizer would hear the reading
   listening = true;
   $('micBtn').classList.add('listening');
-  setStatus('מקשיב… אמרו למשל "עבור לפרק כג" או "פסוק הבא"');
+  setStatus(`מקשיב… ${book.commandExample || 'אמרו למשל "עבור לפרק כג" או "פסוק הבא"'}`);
   let heard = [];
   try {
     heard = await recognize();
@@ -860,6 +875,7 @@ async function listenForCommand() {
   }
   const command = heard?.map(parseCommand).find(Boolean);
   if (command?.chapter) goToChapter(command.chapter);
+  else if (command?.segment) setPlan([command.segment]);
   else if (command) jump(command.dir);
   else if (heard) setStatus(`${heard.length ? `לא הבנתי: "${heard[0]}"` : 'לא נשמעה פקודה'} · רשימת הפקודות בהגדרות`);
   if (resume) play();
@@ -868,10 +884,17 @@ async function listenForCommand() {
 // ---------- Wiring ----------
 $('bundledNote').textContent = `כמה פרקים (${meta.bundled.map(c => book.unit(c).replace(/^פרק /, '').replace(/[׳״]/g, '')).join(', ')}) ארוזים בתוך האפליקציה ולא נמחקים, כך שאפשר להקריא אותם גם בלי אינטרנט.`;
 $('commandRange').textContent = `אפשר מ${book.unit(1)} עד ${book.unit(UNITS)}.`;
+if (book.commandsHelp) $('gotoHelp').innerHTML = book.commandsHelp;
 $('textCredit').innerHTML = meta.credit;
+// Grouped when the app's units belong to books (book.unitGroup)
 for (const id of ['fromSel', 'toSel', 'chainFrom', 'chainTo']) {
   const sel = $(id);
-  for (let c = 1; c <= UNITS; c++) sel.add(new Option(book.unitOption(c), c));
+  let group = null;
+  for (let c = 1; c <= UNITS; c++) {
+    const name = book.unitGroup?.(c);
+    if (name && name !== group?.label) sel.append(group = Object.assign(document.createElement('optgroup'), { label: name }));
+    (group || sel).append(new Option(book.unitOption(c), c));
+  }
 }
 $('fromSel').onchange = () => {
   const from = Number($('fromSel').value);
@@ -894,7 +917,7 @@ for (const d of book.dailies) {
   const btn = $(`${d.id}Btn`), sel = $(`${d.id}Sel`);
   btn.append(`${d.button} `, Object.assign(document.createElement('small'), { id: `${d.id}Day` }));
   sel.setAttribute('aria-label', d.pick);
-  btn.onclick = sel.onchange = () => setPlan([dailySegment(d, Number(sel.value))]);
+  btn.onclick = sel.onchange = () => openDaily(dailySegment(d, Number(sel.value)));
 }
 function syncDaily(r = pos && plan[seg]) {
   for (const d of book.dailies) {
@@ -902,13 +925,17 @@ function syncDaily(r = pos && plan[seg]) {
     $(`${d.id}Btn`).classList.toggle('active', !!r && plan.length === 1 && r.daily === d.id);
   }
 }
-$('chainBtn').onclick = () => setPlan(chainPlan(), chainStatus());
+$('chainBtn').onclick = () => {
+  const p = chainPlan();
+  if (p.length) setPlan(p, chainStatus());
+  else setStatus(book.dailies.map(todaySegment).find(s => s.missing)?.missing || '');
+};
 
 // The date line and the "(היום)" marks follow the calendar while the app stays open
 let shownDate = '';
-function refreshToday() {
+function refreshToday(force = false) {
   const text = todayText();
-  if (text === shownDate) return;
+  if (text === shownDate && !force) return;
   shownDate = text;
   $('today').textContent = text;
   for (const d of book.dailies) {
@@ -922,6 +949,27 @@ function refreshToday() {
 }
 refreshToday();
 setInterval(refreshToday, 60000);
+
+// The app's own settings (book.settings), such as which calendar the weekly parsha follows. They change the daily readings.
+for (const s of book.settings || []) {
+  const label = document.createElement('label');
+  const sel = document.createElement('select');
+  for (const { value, label: text } of s.choices) sel.add(new Option(text, value));
+  sel.value = store.get(s.key, s.default);
+  label.append(`${s.label} `, sel);
+  $('appSettings').append(label);
+  if (s.hint) $('appSettings').append(Object.assign(document.createElement('p'), { className: 'hint', textContent: s.hint }));
+  sel.onchange = () => {
+    // A daily reading being shown follows the new setting: today's stays today's, another day stays that day
+    const r = plan[seg];
+    const d = plan.length === 1 && r?.daily && dailyOf({ type: r.daily });
+    const wasToday = d && r.value === d.today();
+    store.set(s.key, sel.value);
+    refreshToday(true);
+    if (d) openDaily(wasToday ? todaySegment(d) : dailySegment(d, r.value));
+    else downloadInBackground();
+  };
+}
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') refreshToday(); });
 $('playBtn').onclick = () => (playing ? stop() : play());
 $('nextBtn').onclick = () => jump(1);
@@ -945,11 +993,13 @@ const saved = store.get('session', null);
 const savedPlan = saved?.plan || (saved?.range && [saved.range]); // older versions saved a single range
 {
   // Open on the reader's sequence when there is one, otherwise on the first daily reading of today
+  // (or, when today's part isn't in the app, on the first unit, saying so)
   const chain = chainPlan();
-  plan = chain.length ? chain : [todaySegment(book.dailies[0])];
+  const today = todaySegment(book.dailies[0]);
+  plan = chain.length ? chain : [readable(today) ? today : book.unitSegment(1)];
   pos = [...plan[0].start];
   render();
-  setStatus(chain.length ? chainStatus() : plan[0].label);
+  setStatus(chain.length ? chainStatus() : today.missing || plan[0].label);
   if (saved) store.set('session', saved);
 }
 // Offer to resume only when it would land somewhere other than where the app just opened
