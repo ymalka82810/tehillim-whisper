@@ -217,6 +217,7 @@ const settings = {
   stressSpeech: store.get('stressSpeech', false),
   announce: store.get('announce', true),
   chain: store.get('chain', []), // the reader's own sequence: [{ type: 'month' | 'week' } | { type: 'chapters', from, to }]
+  noDownload: store.get('noDownload', []), // recorded voices the reader deleted: not kept offline until turned back on
 };
 
 let voices = []; // [{ id, label, male }]
@@ -440,9 +441,11 @@ function downloadChapter(voice, c) {
       const res = await fetch(url, { cache: 'no-store' });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const bin = await res.blob();
-      await (await caches.open(AUDIO_CACHE)).put(url, new Response(bin));
-      audio.stored[voice].add(c);
-      renderDownloads();
+      if (!settings.noDownload.includes(voice)) {
+        await (await caches.open(AUDIO_CACHE)).put(url, new Response(bin));
+        audio.stored[voice].add(c);
+        renderDownloads();
+      }
       return bin;
     })().finally(() => audio.inflight.delete(url)));
   }
@@ -494,7 +497,7 @@ async function downloadInBackground() {
   try {
     for (;;) {
       const voice = recordedVoice();
-      const next = voice && downloadOrder().find(c => audio.index.voices[voice].chapters[c] && !hasChapter(voice, c));
+      const next = voice && !settings.noDownload.includes(voice) && downloadOrder().find(c => audio.index.voices[voice].chapters[c] && !hasChapter(voice, c));
       if (!next) break;
       try {
         await downloadChapter(voice, next);
@@ -510,14 +513,61 @@ async function downloadInBackground() {
 window.addEventListener('online', downloadInBackground);
 
 function renderDownloads() {
+  renderVoiceFiles();
   const voice = recordedVoice();
   const el = $('downloadStatus');
   el.hidden = !voice;
   if (!voice) return;
+  if (settings.noDownload.includes(voice)) {
+    el.textContent = 'ההורדה כבויה לקול הזה: כל פרק יורד מהאינטרנט בזמן ההקראה ולא נשמר';
+    return;
+  }
   const total = Object.keys(audio.index.voices[voice].chapters).length;
   const have = Object.keys(audio.index.voices[voice].chapters).filter(c => hasChapter(voice, Number(c))).length;
   el.textContent = have >= total ? `✓ כל ${total} הפרקים זמינים גם בלי אינטרנט`
     : `הורדו ${have} מתוך ${total} פרקים${audio.downloading ? ' · ממשיך להוריד ברקע' : ' · ההורדה תמשיך כשיהיה חיבור'}`;
+}
+
+function setNoDownload(voice, off) {
+  settings.noDownload = off ? [...new Set([...settings.noDownload, voice])] : settings.noDownload.filter(v => v !== voice);
+  store.set('noDownload', settings.noDownload);
+}
+
+// Chapters shipped inside the APK can't be removed; everything downloaded goes
+async function deleteVoice(voice) {
+  if (!confirm(`למחוק את קבצי הקול של ${RECORDED[voice]}? הקול לא יורד שוב עד שתפעילו את ההורדה מחדש.`)) return;
+  setNoDownload(voice, true);
+  const cache = await caches.open(AUDIO_CACHE);
+  for (const req of await cache.keys()) if (req.url.includes(`/${voice}/`)) await cache.delete(req);
+  audio.stored[voice] = new Set();
+  audio.memo.clear();
+  renderDownloads();
+}
+
+function renderVoiceFiles() {
+  const ids = Object.keys(RECORDED).filter(id => canPlayOpus && audio.index?.voices[id]);
+  $('voiceFiles').hidden = !ids.length;
+  const list = $('voiceFilesList');
+  list.innerHTML = '';
+  for (const id of ids) {
+    const off = settings.noDownload.includes(id);
+    const count = audio.stored[id]?.size || 0;
+    const li = document.createElement('li');
+    const name = document.createElement('span');
+    name.textContent = `${RECORDED[id]} · ${off ? 'ההורדה כבויה' : `${count} פרקים שמורים`}`;
+    const b = document.createElement('button');
+    b.type = 'button';
+    if (off) {
+      b.textContent = 'הפעלת הורדה';
+      b.onclick = () => { setNoDownload(id, false); renderDownloads(); downloadInBackground(); };
+    } else {
+      b.textContent = 'מחיקה';
+      b.disabled = !count;
+      b.onclick = () => deleteVoice(id);
+    }
+    li.append(name, b);
+    list.append(li);
+  }
 }
 
 // ---------- Speech ----------
@@ -867,7 +917,7 @@ async function listenForCommand() {
   const command = heard?.map(parseCommand).find(Boolean);
   if (command?.chapter) goToChapter(command.chapter);
   else if (command) jump(command.dir);
-  else if (heard) setStatus(heard.length ? `לא הבנתי: "${heard[0]}"` : 'לא נשמעה פקודה');
+  else if (heard) setStatus(`${heard.length ? `לא הבנתי: "${heard[0]}"` : 'לא נשמעה פקודה'} · רשימת הפקודות בהגדרות`);
   if (resume) play();
 }
 
@@ -920,6 +970,7 @@ $('playBtn').onclick = () => (playing ? stop() : play());
 $('nextBtn').onclick = () => jump(1);
 $('prevBtn').onclick = () => jump(-1);
 $('micBtn').hidden = !canListen;
+$('commandsHelp').hidden = !canListen;
 $('micBtn').onclick = listenForCommand;
 
 if ('mediaSession' in navigator) {

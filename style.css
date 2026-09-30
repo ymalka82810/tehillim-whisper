@@ -154,6 +154,10 @@ dialog input[type=range] { width: 100%; accent-color: var(--accent); }
 .chain li span::before { content: counter(part) ". "; color: var(--muted); }
 .chain li button { padding: 4px 10px; }
 .chain li button:disabled { opacity: 0.3; }
+.chain[hidden] { display: none; }
+.voice-files ul { margin: 0; padding: 0; list-style: none; display: grid; gap: 6px; }
+.voice-files li span::before { content: none; }
+.chain details p { margin: 6px 0 0; }
 #voiceHealth { color: #8fd18f; }
 #voiceHealth.bad { color: #f0a36b; }
 .is-web .native-only, .is-native .web-only { display: none !important; }
