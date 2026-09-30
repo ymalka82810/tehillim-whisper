@@ -1000,7 +1000,17 @@ bindChain();
 
 const saved = store.get('session', null);
 const savedPlan = saved?.plan || (saved?.range && [saved.range]); // older versions saved a single range
-if (savedPlan && saved?.pos) {
+{
+  // Open on the reader's sequence when there is one, otherwise on today's reading by the month
+  plan = settings.chain.length ? chainPlan() : [todayMonth()];
+  pos = [...plan[0].start];
+  render();
+  setStatus(settings.chain.length ? chainStatus() : plan[0].label);
+  if (saved) store.set('session', saved);
+}
+// Offer to resume only when it would land somewhere other than where the app just opened
+const sameAsOpening = JSON.stringify([savedPlan, saved?.seg || 0, saved?.pos]) === JSON.stringify([plan, seg, pos]);
+if (savedPlan && saved?.pos && !sameAsOpening) {
   $('resumeBtn').hidden = false;
   $('resumeBtn').textContent = `המשך מפרק ${hebNum(saved.pos[0])} פסוק ${hebNum(saved.pos[1] + 1)}`;
   $('resumeBtn').onclick = () => {
@@ -1013,14 +1023,6 @@ if (savedPlan && saved?.pos) {
     $('resumeBtn').hidden = true;
     prioritize(plan);
   };
-}
-{
-  // Open on the reader's sequence when there is one, otherwise on today's reading by the month
-  plan = settings.chain.length ? chainPlan() : [todayMonth()];
-  pos = [...plan[0].start];
-  render();
-  setStatus(settings.chain.length ? chainStatus() : plan[0].label);
-  if (saved) store.set('session', saved);
 }
 
 splash.set(80);
