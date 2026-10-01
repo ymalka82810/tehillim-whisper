@@ -221,6 +221,7 @@ function voiceProblem() {
 function showVoiceKind() {
   $('voiceKind').value = recordedVoice() || 'device';
   $('deviceVoice').hidden = !!recordedVoice();
+  renderTimeLeft();
   renderDownloads();
   renderVoiceHealth();
 }
@@ -246,7 +247,7 @@ function bindSettings() {
     $('pauseOut').textContent = Number(settings.pause) === 0 ? 'ללא' : `×${Number(settings.pause).toFixed(1)}`;
   };
   show();
-  const save = (key, value) => { settings[key] = value; store.set(key, value); show(); };
+  const save = (key, value) => { settings[key] = value; store.set(key, value); show(); renderTimeLeft(); };
   rate.oninput = () => save('rate', Number(rate.value));
   pause.oninput = () => save('pause', Number(pause.value));
   $('nikudSpeech').onchange = e => save('nikudSpeech', e.target.checked);
@@ -600,6 +601,7 @@ let plan = []; // segments read one after another: [{ start, end, label }]
 let seg = 0; // the segment being read
 let pos = null; // [chapter(1-based), verse(0-based)]
 let playing = false;
+let keepReadingLook = false; // a voice command in the middle of reading isn't a stop
 let runToken = 0;
 
 const cmp = (a, b) => a[0] - b[0] || a[1] - b[1];
@@ -626,18 +628,78 @@ function flatIndex(p) {
   return n;
 }
 
+// ---------- Time left ----------
+// Each verse takes its speech at the chosen speed, then the reader's turn to repeat it (as run() does).
+// The speech is estimated (a recorded clip from its size, the phone's voice from the letters) and corrected
+// by how long verses actually took here, for each voice.
+const BYTES_PER_SECOND = 4200; // the recorded voices' Opus, measured over their clips
+const SECONDS_PER_LETTER = 0.08; // a guess for the phone's voice; the correction learns the real one
+const letterCounts = chapters.map(verses => verses.map(t => t.replace(/[^א-ת]/g, '').length));
+const paceFix = store.get('paceFix', {}); // { <voice or 'device'>: measured / estimated }
+const voiceKey = () => recordedVoice() || 'device';
+
+// Seconds at speed 1 of clip `i` of chapter `c` (0 = the announcement, else the verse)
+function speechSeconds(c, i) {
+  const bytes = recordedVoice() && audio.index.voices[recordedVoice()].chapters[c]?.[i];
+  if (bytes) return bytes / BYTES_PER_SECOND;
+  return (i ? letterCounts[c - 1][i - 1] : book.announcement(c).replace(/[^א-ת]/g, '').length) * SECONDS_PER_LETTER;
+}
+const spokenSeconds = (c, i) => speechSeconds(c, i) / settings.rate * (paceFix[voiceKey()] || 1);
+const pauseAfter = spoken => (settings.pause > 0 ? spoken * settings.pause + 0.5 : 0.3);
+
+function learnPace(c, i, took) {
+  const ratio = took / (speechSeconds(c, i) / settings.rate);
+  if (!(ratio > 0.3 && ratio < 3)) return; // a failed or cut-off clip says nothing about the pace
+  const key = voiceKey();
+  paceFix[key] = (paceFix[key] || 1) * 0.8 + ratio * 0.2;
+  store.set('paceFix', paceFix);
+}
+
+// From the verse at `pos` to the end of the plan
+function secondsLeft() {
+  let total = 0;
+  for (let s = seg; s < plan.length; s++) {
+    for (let p = s === seg ? pos : plan[s].start; p && cmp(p, plan[s].end) <= 0; p = step(p, 1)) {
+      const [c, v] = p;
+      if (settings.announce && v === 0) total += spokenSeconds(c, 0) + 0.4;
+      const spoken = spokenSeconds(c, v + 1);
+      total += spoken + pauseAfter(spoken);
+    }
+  }
+  return total;
+}
+
+function durationText(seconds) {
+  if (seconds < 45) return 'פחות מדקה';
+  const m = Math.max(1, Math.round(seconds / 60)), h = Math.floor(m / 60), r = m % 60;
+  const hours = h === 1 ? 'שעה' : h === 2 ? 'שעתיים' : `${h} שעות`;
+  if (!h) return m === 1 ? 'דקה' : `${m} דקות`;
+  return r ? `${hours} ו${r === 1 ? 'דקה' : `־${r} דקות`}` : hours;
+}
+
+function renderTimeLeft() {
+  if (!pos) return;
+  const seconds = secondsLeft();
+  const end = new Date(Date.now() + seconds * 1000).toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' });
+  $('timeLeft').textContent = seconds < 45 ? 'פחות מדקה לסיום' : `עוד בערך ${durationText(seconds)} · סיום ב־${end}`;
+  $('timeLeft').hidden = false;
+}
+// The finish time moves on while the reader is paused (or between verses): keep it current
+setInterval(() => { if (!$('timeLeft').hidden) renderTimeLeft(); }, 10000);
+
 function setStatus(text) { $('status').textContent = text; }
 
 function render() {
   if (!pos) return;
   const [c, v] = pos;
   $('where').textContent = book.where(c, v);
-  $('verse').textContent = chapters[c - 1][v].replaceAll(STRESS, '');
+  showVerse(chapters[c - 1][v].replaceAll(STRESS, ''));
   const r = plan[seg];
   const sizes = plan.map(s => flatIndex(s.end) - flatIndex(s.start) + 1);
   const total = sizes.reduce((a, b) => a + b, 0);
   const done = sizes.slice(0, seg).reduce((a, b) => a + b, 0) + flatIndex(pos) - flatIndex(r.start);
   $('bar').style.width = `${(done / total) * 100}%`;
+  renderTimeLeft();
   $('segment').hidden = plan.length < 2;
   $('segment').textContent = `חלק ${seg + 1} מתוך ${plan.length} · ${r.label}`;
   $('fromSel').value = r.start[0];
@@ -652,6 +714,33 @@ function render() {
     });
   }
   store.set('session', { plan, seg, pos });
+}
+
+// A new verse rises into place and the old one rises away (they come down from above when going back)
+let shown = null; // [seg, flatIndex] of the verse on screen
+const calm = matchMedia('(prefers-reduced-motion: reduce)');
+function showVerse(text) {
+  const verse = $('verse'), here = [seg, flatIndex(pos)];
+  const dir = shown ? Math.sign(here[0] - shown[0] || here[1] - shown[1]) : 0;
+  shown = here;
+  if (verse.textContent === text) return;
+  const move = dir && !calm.matches;
+  if (move && verse.textContent) {
+    const ghost = verse.cloneNode(true);
+    ghost.removeAttribute('id');
+    ghost.setAttribute('aria-hidden', 'true');
+    ghost.classList.add('ghost');
+    Object.assign(ghost.style, { top: `${verse.offsetTop}px`, left: `${verse.offsetLeft}px`, width: `${verse.offsetWidth}px` });
+    verse.after(ghost);
+    ghost.animate([{ transform: `translateY(${-dir * 2}em)`, opacity: 0 }], { duration: 300, easing: 'ease-in' })
+      .finished.finally(() => ghost.remove());
+  }
+  verse.style.translate = verse.style.opacity = ''; // let go of a swipe in progress
+  verse.textContent = text;
+  if (move) {
+    verse.animate([{ transform: `translateY(${dir * 2}em)`, opacity: 0 }, { transform: 'none', opacity: 1 }],
+      { duration: 380, easing: 'cubic-bezier(.2, .8, .3, 1)' });
+  }
 }
 
 function setPlan(p, label = p.length === 1 ? p[0].label : '') {
@@ -682,6 +771,7 @@ async function run() {
     setStatus('מקריא…');
     const duration = await say(c, v + 1);
     if (token !== runToken) return;
+    learnPace(c, v + 1, duration);
     const pause = settings.pause > 0 ? duration * settings.pause + 0.5 : 0.3;
     if (settings.pause > 0) setStatus('תורך לומר…');
     await sleep(pause, token);
@@ -691,6 +781,7 @@ async function run() {
       stop();
       setStatus('סיימת. תזכו למצוות!');
       $('bar').style.width = '100%';
+      $('timeLeft').hidden = true;
       return;
     }
     ({ seg, pos } = next);
@@ -731,6 +822,8 @@ document.addEventListener('visibilitychange', () => {
 });
 
 function updatePlayButton() {
+  // While reading, the date and the day / range pickers step aside for the verse; they come back on stop
+  document.body.classList.toggle('reading', playing || keepReadingLook);
   $('playBtn').classList.toggle('playing', playing);
   $('playBtn').setAttribute('aria-label', playing ? 'השהה' : 'נגן');
   if ('mediaSession' in navigator) navigator.mediaSession.playbackState = playing ? 'playing' : 'paused';
@@ -858,6 +951,7 @@ let listening = false;
 async function listenForCommand() {
   if (listening || !pos) return;
   const resume = playing;
+  keepReadingLook = resume;
   stop(); // the recognizer would hear the reading
   listening = true;
   $('micBtn').classList.add('listening');
@@ -871,6 +965,7 @@ async function listenForCommand() {
     heard = null;
   } finally {
     listening = false;
+    keepReadingLook = false;
     $('micBtn').classList.remove('listening');
   }
   const command = heard?.map(parseCommand).find(Boolean);
@@ -879,6 +974,7 @@ async function listenForCommand() {
   else if (command) jump(command.dir);
   else if (heard) setStatus(`${heard.length ? `לא הבנתי: "${heard[0]}"` : 'לא נשמעה פקודה'} · רשימת הפקודות בהגדרות`);
   if (resume) play();
+  else updatePlayButton();
 }
 
 // ---------- Wiring ----------
@@ -974,9 +1070,61 @@ document.addEventListener('visibilitychange', () => { if (document.visibilitySta
 $('playBtn').onclick = () => (playing ? stop() : play());
 $('nextBtn').onclick = () => jump(1);
 $('prevBtn').onclick = () => jump(-1);
+// Swiping the verse up moves on to the next one and down back to the one before; so does the mouse wheel.
+// Only when the page itself has nowhere to scroll that way, so a long verse can still be scrolled through.
+const atEdge = dir => (dir > 0 ? innerHeight + scrollY >= document.documentElement.scrollHeight - 2 : scrollY <= 0);
+const canGo = dir => pos && advance(dir);
+const mainEl = document.querySelector('main');
+let swipe = null;
+function letGo() {
+  const verse = $('verse');
+  if (!verse.style.translate) return;
+  verse.animate([{ translate: verse.style.translate, opacity: verse.style.opacity }, { translate: '0 0', opacity: 1 }], { duration: 200, easing: 'ease-out' });
+  verse.style.translate = verse.style.opacity = '';
+}
+mainEl.addEventListener('touchstart', e => {
+  const t = e.touches[0];
+  swipe = e.touches.length === 1 ? { x: t.clientX, y: t.clientY, dx: 0, dy: 0, edge: { 1: atEdge(1), '-1': atEdge(-1) } } : null;
+}, { passive: true });
+mainEl.addEventListener('touchmove', e => {
+  if (!swipe) return;
+  const t = e.touches[0];
+  swipe.dx = t.clientX - swipe.x;
+  swipe.dy = t.clientY - swipe.y;
+  const dir = swipe.dy < 0 ? 1 : -1, verse = $('verse');
+  const follow = Math.abs(swipe.dy) > Math.abs(swipe.dx) && swipe.edge[dir] && canGo(dir) && !calm.matches;
+  verse.style.translate = follow ? `0 ${swipe.dy * 0.35}px` : '';
+  verse.style.opacity = follow ? 1 - Math.min(Math.abs(swipe.dy) / 400, 0.5) : '';
+}, { passive: true });
+mainEl.addEventListener('touchend', () => {
+  if (!swipe) return;
+  const { dx, dy, edge } = swipe, dir = dy < 0 ? 1 : -1;
+  swipe = null;
+  if (Math.abs(dy) > 60 && Math.abs(dy) > Math.abs(dx) * 1.5 && edge[dir] && canGo(dir)) jump(dir);
+  else letGo();
+});
+mainEl.addEventListener('touchcancel', () => { swipe = null; letGo(); });
+let lastWheel = -Infinity;
+mainEl.addEventListener('wheel', e => {
+  const fresh = e.timeStamp - lastWheel > 500; // one flick of the wheel (or one glide of a trackpad) is one verse
+  lastWheel = e.timeStamp;
+  const dir = Math.sign(e.deltaY);
+  if (fresh && dir && atEdge(dir) && canGo(dir)) jump(dir);
+}, { passive: true });
+
 $('micBtn').hidden = !canListen;
 $('commandsHelp').hidden = !canListen;
 $('micBtn').onclick = listenForCommand;
+// A double tap anywhere on the screen, away from the controls, listens too: easier than finding the button
+let lastTap = null;
+document.addEventListener('pointerup', e => {
+  if (!canListen || e.target.closest('button, select, input, textarea, label, summary, a, dialog')) return void (lastTap = null);
+  const near = lastTap && e.timeStamp - lastTap.time < 400 && Math.hypot(e.clientX - lastTap.x, e.clientY - lastTap.y) < 40;
+  lastTap = near ? null : { time: e.timeStamp, x: e.clientX, y: e.clientY };
+  if (!near) return;
+  getSelection()?.removeAllRanges(); // a double click selects the word under it
+  listenForCommand();
+});
 
 if ('mediaSession' in navigator) {
   navigator.mediaSession.setActionHandler('play', play);
