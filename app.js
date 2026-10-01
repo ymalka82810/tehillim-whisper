@@ -1172,6 +1172,8 @@ await loadAudioIndex();
 splash.set(90);
 await loadVoices();
 {
+  // Until the reader picks a voice, the default one may not be recorded for this app (Chumash has only Omer): take one that is
+  if (store.get('voice', null) === null && !recordedVoice()) settings.voice = Object.keys(RECORDED).find(id => canPlayOpus && audio.index?.voices[id]) || settings.voice;
   const kind = $('voiceKind');
   for (const [id, label] of Object.entries(RECORDED)) if (audio.index?.voices[id] && canPlayOpus) kind.add(new Option(label, id), kind.options[kind.options.length - 1]);
   showVoiceKind();
