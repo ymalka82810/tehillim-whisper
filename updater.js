@@ -26,7 +26,8 @@ export async function findUpdate(repo, tag) {
   return { version: release.tag_name.slice(tag.length), url: apk.browser_download_url };
 }
 
-// Downloads the APK and opens the system install dialog. onProgress gets 0–100 (-1 if the size is unknown).
+// Downloads the APK (in the system DownloadManager, so it goes on when the user leaves the app) and opens
+// the system install dialog, once the app is in the foreground. onProgress gets 0–100 (-1 if the size is unknown).
 // Rejects with an Error whose message is "busy", "bad url", "download", "not an update", "permission" or "no installer".
 export async function installUpdate(url, onProgress) {
   const listener = onProgress && cap.addListener('AppUpdater', 'progress', e => onProgress(e.percent));

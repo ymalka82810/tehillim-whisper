@@ -1182,7 +1182,7 @@ if (native && !recordedVoice() && voiceProblem()) $('settings').showModal();
 downloadInBackground();
 
 // ---------- App updates (APK only) ----------
-// The APK downloads inside the app and the system install dialog opens, so updating is one tap
+// The APK downloads (in the background too) and the system install dialog opens, so updating is one tap
 const UPDATE_ERRORS = {
   permission: 'כדי לעדכן, יש לאשר לאפליקציה להתקין עדכונים',
   'not an update': 'הקובץ שהורד אינו גרסה חדשה של האפליקציה',
