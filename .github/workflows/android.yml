@@ -14,12 +14,16 @@ jobs:
     strategy:
       fail-fast: false # one app's failed build mustn't cancel the others' releases
       matrix:
-        # One APK per app (apps/<app>/config.js). Chumash and Tanya join once they have their recorded voices.
+        # One APK per app (apps/<app>/config.js). Tanya joins once it has its recorded voices.
         include:
           - app: tehillim
             name: תהילים בדרך
             tag: v # Tehillim APKs from before the split look only at the latest release, so Tehillim stays "latest"
             latest: true
+          - app: chumash
+            name: חומש בדרך
+            tag: chumash-v # meta.releaseTag: the app finds its updates by this prefix
+            latest: false
     steps:
       - uses: actions/checkout@v5
 
